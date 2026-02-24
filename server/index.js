@@ -56,18 +56,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'slickbooks-web', timestamp: new Date().toISOString() });
 });
 
-// DB diagnostic (temporary)
-app.get('/api/db-check', async (req, res) => {
-  try {
-    const p = getPool();
-    if (!p) return res.json({ db: false, error: 'No pool' });
-    const result = await p.query('SELECT NOW() as time, current_database() as db');
-    const tables = await p.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename");
-    res.json({ db: true, time: result.rows[0].time, database: result.rows[0].db, tables: tables.rows.map(r => r.tablename) });
-  } catch (err) {
-    res.json({ db: false, error: err.message });
-  }
-});
 
 // Static files — serve the SPA
 app.use(express.static(path.join(__dirname, '..', 'public'), {
