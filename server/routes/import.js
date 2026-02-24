@@ -20,10 +20,16 @@ const upload = multer({
   }
 });
 
+// Try to load pdf-parse (optional — not available on all hosts)
+let pdfParse = null;
+try { pdfParse = require('pdf-parse'); } catch (e) { console.log('[Import] pdf-parse not available — PDF upload disabled'); }
+
 // Parse bank statement PDF
 async function parsePDF(buffer) {
+  if (!pdfParse) {
+    return { success: false, error: 'PDF parsing is not available on this server. Please upload CSV files instead.', transactions: [] };
+  }
   try {
-    const pdfParse = require('pdf-parse');
     const data = await pdfParse(buffer);
     const text = data.text;
 
