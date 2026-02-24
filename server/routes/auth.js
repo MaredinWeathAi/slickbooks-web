@@ -18,8 +18,12 @@ router.post('/login', async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
     req.session.user = { id: user.id, username: user.username, fullName: user.full_name, role: user.role };
-    res.json({ success: true, user: req.session.user });
+    req.session.save((saveErr) => {
+      if (saveErr) console.error('[Auth] Session save error:', saveErr.message);
+      res.json({ success: true, user: req.session.user });
+    });
   } catch (err) {
+    console.error('[Auth Login Error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -55,8 +59,12 @@ router.post('/register', async (req, res) => {
     );
 
     req.session.user = { id: user.id, username: user.username, fullName: user.full_name, role: user.role };
-    res.json({ success: true, user: req.session.user });
+    req.session.save((saveErr) => {
+      if (saveErr) console.error('[Auth] Session save error:', saveErr.message);
+      res.json({ success: true, user: req.session.user });
+    });
   } catch (err) {
+    console.error('[Auth Register Error]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
