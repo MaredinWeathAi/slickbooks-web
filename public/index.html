@@ -1,0 +1,2119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>SlickBooks — Maredin Wealth Advisors</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── CSS Variables ────────────────────────────────────── */
+    :root {
+      --primary: #0f172a;
+      --primary-light: #1e293b;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-light: #dbeafe;
+      --success: #10b981;
+      --success-bg: #ecfdf5;
+      --danger: #ef4444;
+      --danger-bg: #fef2f2;
+      --warning: #f59e0b;
+      --warning-bg: #fffbeb;
+      --info: #3b82f6;
+      --purple: #8b5cf6;
+      --text: #1e293b;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --bg-page: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-secondary: #f8fafc;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+      --sidebar-width: 220px;
+      --header-height: 64px;
+      --radius: 8px;
+      --radius-sm: 6px;
+      --radius-lg: 12px;
+    }
+
+    /* ── Reset ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg-page);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    input, select, textarea, button { font-family: inherit; font-size: inherit; }
+
+    /* ── Login Screen ──────────────────────────────────────── */
+    #login-screen {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+    }
+    #login-screen.hidden { display: none; }
+    .login-card {
+      background: var(--bg-card); border-radius: var(--radius-lg);
+      padding: 48px 40px; width: 400px; max-width: 90vw;
+      box-shadow: var(--shadow-lg);
+      text-align: center;
+    }
+    .login-logo { font-size: 32px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .login-subtitle { color: var(--text-muted); font-size: 13px; margin-bottom: 32px; }
+    .login-field { margin-bottom: 16px; text-align: left; }
+    .login-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .login-field input {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); font-size: 14px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .login-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .login-btn {
+      width: 100%; padding: 12px; border: none; border-radius: var(--radius-sm);
+      background: var(--accent); color: #fff; font-weight: 600; font-size: 15px;
+      cursor: pointer; transition: background 0.2s; margin-top: 8px;
+    }
+    .login-btn:hover { background: var(--accent-hover); }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    #login-error { display: none; background: var(--danger-bg); color: var(--danger); padding: 10px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 13px; }
+
+    /* ── App Layout ─────────────────────────────────────────── */
+    #app-wrapper { display: none; height: 100vh; flex-direction: column; }
+    #app-wrapper.active { display: flex; }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .header {
+      background: var(--primary);
+      height: var(--header-height);
+      display: flex; align-items: center;
+      padding: 0 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    .header-brand {
+      display: flex; align-items: center; gap: 12px;
+      color: #ffffff; font-size: 20px; font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .header-brand svg { width: 32px; height: 32px; }
+    .header-spacer { flex: 1; }
+    .header-user {
+      display: flex; align-items: center; gap: 12px;
+      color: rgba(255,255,255,0.8); font-size: 13px;
+    }
+    .header-user-name { font-weight: 500; }
+    .header-btn {
+      background: rgba(255,255,255,0.1); border: none; color: #fff;
+      padding: 6px 14px; border-radius: var(--radius-sm); cursor: pointer;
+      font-size: 12px; font-weight: 500; transition: background 0.2s;
+    }
+    .header-btn:hover { background: rgba(255,255,255,0.2); }
+
+    /* ── Body Container ──────────────────────────────────── */
+    .app-body {
+      display: flex; flex: 1; overflow: hidden;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--primary-light);
+      overflow-y: auto; overflow-x: hidden;
+      flex-shrink: 0;
+      padding: 16px 0;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+    .nav-section { margin-bottom: 20px; }
+    .nav-section-title {
+      padding: 0 20px; margin-bottom: 4px;
+      font-size: 10px; font-weight: 600;
+      color: rgba(255,255,255,0.4);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .nav-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 20px; color: rgba(255,255,255,0.7);
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      transition: all 0.15s; border-left: 3px solid transparent;
+      user-select: none;
+    }
+    .nav-link:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .nav-link.active {
+      background: rgba(37,99,235,0.15); color: #fff;
+      border-left-color: var(--accent);
+    }
+    .nav-link svg { width: 18px; height: 18px; opacity: 0.8; flex-shrink: 0; }
+    .nav-link.active svg { opacity: 1; }
+
+    /* ── Main Content ────────────────────────────────────── */
+    .main-content {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      padding: 24px; background: var(--bg-page);
+    }
+    .main-content::-webkit-scrollbar { width: 6px; }
+    .main-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    /* ── Views ────────────────────────────────────────────── */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── Page Headers ────────────────────────────────────── */
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+    }
+    .page-title { font-size: 22px; font-weight: 700; color: var(--text); }
+    .page-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+    /* ── Cards ────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card); border-radius: var(--radius);
+      border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+      padding: 20px; margin-bottom: 20px;
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-light);
+    }
+    .card-title { font-size: 15px; font-weight: 600; }
+
+    /* ── KPI Cards ────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px; margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--bg-card); border-radius: var(--radius);
+      border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+      padding: 20px;
+    }
+    .kpi-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .kpi-value { font-size: 24px; font-weight: 700; color: var(--text); }
+    .kpi-value.positive { color: var(--success); }
+    .kpi-value.negative { color: var(--danger); }
+    .kpi-change { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .kpi-change.up { color: var(--success); }
+    .kpi-change.down { color: var(--danger); }
+
+    /* ── Buttons ──────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s; background: var(--bg-card);
+      color: var(--text);
+    }
+    .btn:hover { background: var(--bg-secondary); }
+    .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ── Tables ───────────────────────────────────────────── */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border); background: var(--bg-secondary);
+    }
+    .data-table td {
+      padding: 10px 12px; border-bottom: 1px solid var(--border-light);
+      font-size: 13px;
+    }
+    .data-table tr:hover td { background: var(--bg-secondary); }
+    .data-table .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table .amount.debit { color: var(--text); }
+    .data-table .amount.credit { color: var(--success); }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .text-muted { color: var(--text-muted); }
+    .text-success { color: var(--success); }
+    .text-danger { color: var(--danger); }
+
+    /* ── Forms ────────────────────────────────────────────── */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+    .form-input, .form-select {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); font-size: 13px; outline: none;
+      transition: border-color 0.2s; background: #fff;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    textarea.form-input { min-height: 80px; resize: vertical; }
+
+    /* ── Modals ───────────────────────────────────────────── */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; align-items: center; justify-content: center; z-index: 1000;
+    }
+    .modal-backdrop.active { display: flex; }
+    .modal {
+      background: var(--bg-card); border-radius: var(--radius-lg);
+      width: 600px; max-width: 90vw; max-height: 85vh;
+      overflow-y: auto; box-shadow: var(--shadow-lg);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px; border-bottom: 1px solid var(--border);
+    }
+    .modal-title { font-size: 16px; font-weight: 600; }
+    .modal-close {
+      background: none; border: none; font-size: 20px; color: var(--text-muted);
+      cursor: pointer; padding: 4px; line-height: 1;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 24px; }
+    .modal-footer {
+      display: flex; justify-content: flex-end; gap: 8px;
+      padding: 16px 24px; border-top: 1px solid var(--border);
+    }
+
+    /* ── Tags / Badges ───────────────────────────────────── */
+    .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 9999px;
+      font-size: 11px; font-weight: 600;
+    }
+    .tag-blue { background: #dbeafe; color: #1d4ed8; }
+    .tag-green { background: #dcfce7; color: #15803d; }
+    .tag-yellow { background: #fef3c7; color: #92400e; }
+    .tag-red { background: #fee2e2; color: #dc2626; }
+    .tag-gray { background: #f1f5f9; color: #475569; }
+    .tag-purple { background: #ede9fe; color: #6d28d9; }
+
+    /* ── Charts ───────────────────────────────────────────── */
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .chart-container { background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border); padding: 20px; }
+    .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+    .chart-container svg { width: 100%; }
+
+    /* ── Expense Bars ─────────────────────────────────────── */
+    .expense-bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .expense-bar-label { font-size: 12px; color: var(--text-secondary); width: 140px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .expense-bar-track { flex: 1; height: 20px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+    .expense-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
+    .expense-bar-amount { font-size: 12px; font-weight: 600; color: var(--text); width: 80px; text-align: right; flex-shrink: 0; }
+
+    /* ── Period Toggle ────────────────────────────────────── */
+    .period-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+    .period-btn {
+      padding: 6px 14px; font-size: 12px; font-weight: 500;
+      background: var(--bg-card); border: none; cursor: pointer;
+      color: var(--text-secondary); transition: all 0.15s;
+      border-right: 1px solid var(--border);
+    }
+    .period-btn:last-child { border-right: none; }
+    .period-btn.active { background: var(--accent); color: #fff; }
+    .period-btn:hover:not(.active) { background: var(--bg-secondary); }
+
+    /* ── Report sections ──────────────────────────────────── */
+    .report-section { margin-bottom: 24px; }
+    .report-section-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+    .report-total-row { font-weight: 700; background: var(--bg-secondary) !important; }
+    .report-total-row td { border-top: 2px solid var(--border); }
+    .report-grand-total td { font-size: 15px; border-top: 3px double var(--text); }
+
+    /* ── Filter bar ──────────────────────────────────────── */
+    .filter-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .filter-bar label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .filter-bar input, .filter-bar select {
+      padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 13px; outline: none;
+    }
+    .filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent); }
+
+    /* ── Pagination ───────────────────────────────────────── */
+    .pagination {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      margin-top: 16px; font-size: 13px;
+    }
+    .pagination .btn { min-width: 36px; justify-content: center; }
+    .pagination-info { color: var(--text-muted); }
+
+    /* ── Notifications / Toast ────────────────────────────── */
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
+    .toast {
+      background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border);
+      box-shadow: var(--shadow-lg); padding: 14px 20px;
+      margin-bottom: 8px; display: flex; align-items: center; gap: 10px;
+      font-size: 13px; animation: slideInRight 0.3s;
+      max-width: 360px;
+    }
+    .toast.success { border-left: 4px solid var(--success); }
+    .toast.error { border-left: 4px solid var(--danger); }
+    .toast.info { border-left: 4px solid var(--info); }
+
+    /* ── Upload / Dropzone ────────────────────────────────── */
+    .dropzone {
+      border: 2px dashed var(--border); border-radius: var(--radius);
+      padding: 40px; text-align: center; color: var(--text-muted);
+      cursor: pointer; transition: all 0.2s; background: var(--bg-secondary);
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+    .dropzone-icon { font-size: 36px; margin-bottom: 8px; }
+    .dropzone-text { font-size: 14px; font-weight: 500; }
+    .dropzone-hint { font-size: 12px; margin-top: 4px; }
+
+    /* ── Empty state ──────────────────────────────────────── */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+    .empty-state-text { font-size: 16px; font-weight: 500; margin-bottom: 4px; color: var(--text-secondary); }
+    .empty-state-hint { font-size: 13px; }
+
+    /* ── Loading ──────────────────────────────────────────── */
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .loading-overlay {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      padding: 40px; color: var(--text-muted); font-size: 14px;
+    }
+
+    /* ── Responsive ───────────────────────────────────────── */
+    @media (max-width: 1024px) {
+      .chart-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .form-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main-content { padding: 16px; }
+      .kpi-grid { grid-template-columns: 1fr; }
+      .modal { width: 95vw; }
+      .filter-bar { flex-direction: column; align-items: stretch; }
+    }
+
+    /* ── Line item rows ──────────────────────────────────── */
+    .line-item-row {
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr auto; gap: 8px;
+      align-items: center; margin-bottom: 8px;
+    }
+    .line-item-row select, .line-item-row input { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; }
+    .remove-line-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 4px; }
+    .line-totals { display: flex; justify-content: flex-end; gap: 24px; padding: 12px 0; font-weight: 600; font-size: 13px; border-top: 2px solid var(--border); }
+    .balance-ok { color: var(--success); }
+    .balance-off { color: var(--danger); }
+
+    /* ── Account type colors ──────────────────────────────── */
+    .type-asset { color: #2563eb; }
+    .type-liability { color: #dc2626; }
+    .type-equity { color: #7c3aed; }
+    .type-revenue { color: #059669; }
+    .type-expense { color: #d97706; }
+
+    /* ── Scrollable table wrapper ─────────────────────────── */
+    .table-wrapper { overflow-x: auto; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════ Login Screen ═══════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">SlickBooks</div>
+    <div class="login-subtitle">Maredin Wealth Advisors — Accounting Platform</div>
+    <div id="login-error"></div>
+    <div class="login-field">
+      <label>Username</label>
+      <input type="text" id="login-username" autocomplete="username" placeholder="Enter your username">
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <input type="password" id="login-password" autocomplete="current-password" placeholder="Enter your password">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In</button>
+    <div style="margin-top: 16px; font-size: 12px; color: var(--text-muted);" id="login-register-link">
+      No account? <a href="#" onclick="showRegister(); return false;">Create one</a>
+    </div>
+    <!-- Register form (hidden by default) -->
+    <div id="register-form" style="display:none; margin-top: 20px; text-align: left;">
+      <div class="login-field"><label>Full Name</label><input type="text" id="reg-fullname" placeholder="Your full name"></div>
+      <div class="login-field"><label>Username</label><input type="text" id="reg-username" placeholder="Choose a username"></div>
+      <div class="login-field"><label>Password</label><input type="password" id="reg-password" placeholder="Choose a password"></div>
+      <button class="login-btn" onclick="doRegister()">Create Account</button>
+      <div style="margin-top: 8px; text-align: center;"><a href="#" onclick="hideRegister(); return false;" style="font-size: 12px;">Back to login</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ App Wrapper ═══════ -->
+<div id="app-wrapper">
+
+  <!-- ── Header ── -->
+  <div class="header">
+    <div class="header-brand">
+      <svg viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8" fill="#2563eb"/><path d="M8 16h16M12 10v12M20 10v12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+      SlickBooks
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-user">
+      <span class="header-user-name" id="header-username"></span>
+      <button class="header-btn" onclick="doLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- ── Body ── -->
+  <div class="app-body">
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <div class="nav-section">
+        <div class="nav-section-title">Overview</div>
+        <div class="nav-link active" onclick="switchView('dashboard')" data-view="dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Accounting</div>
+        <div class="nav-link" onclick="switchView('accounts')" data-view="accounts">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+          Chart of Accounts
+        </div>
+        <div class="nav-link" onclick="switchView('journal')" data-view="journal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          Journal Entries
+        </div>
+        <div class="nav-link" onclick="switchView('search')" data-view="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Search Ledger
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Reports</div>
+        <div class="nav-link" onclick="switchView('reports')" data-view="reports">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+          Financial Reports
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-title">Banking</div>
+        <div class="nav-link" onclick="switchView('import')" data-view="import">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Bank Import
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+
+      <!-- ═══════ DASHBOARD VIEW ═══════ -->
+      <div class="view active" id="dashboard-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Dashboard</div>
+            <div class="page-subtitle" id="dashboard-date"></div>
+          </div>
+          <div class="period-toggle" id="dashboard-period-toggle">
+            <button class="period-btn active" onclick="setDashboardPeriod('ytd')">YTD</button>
+            <button class="period-btn" onclick="setDashboardPeriod('month')">Month</button>
+            <button class="period-btn" onclick="setDashboardPeriod('quarter')">Quarter</button>
+          </div>
+        </div>
+
+        <div class="kpi-grid" id="dashboard-kpis"></div>
+
+        <div class="chart-grid" id="dashboard-charts"></div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Top Expense Categories (YTD)</div>
+          </div>
+          <div id="expense-categories"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Recent Journal Entries</div>
+            <button class="btn btn-sm" onclick="switchView('journal')">View All</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table" id="dashboard-recent-table">
+              <thead>
+                <tr><th>Entry #</th><th>Date</th><th>Description</th><th>Type</th><th class="text-right">Amount</th><th>Status</th></tr>
+              </thead>
+              <tbody id="dashboard-recent-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ CHART OF ACCOUNTS VIEW ═══════ -->
+      <div class="view" id="accounts-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Chart of Accounts</div>
+            <div class="page-subtitle">Manage your accounts</div>
+          </div>
+          <button class="btn btn-primary" onclick="openAccountModal()">+ New Account</button>
+        </div>
+
+        <div class="filter-bar">
+          <label>Type:</label>
+          <select id="acct-filter-type" onchange="loadAccounts()">
+            <option value="">All Types</option>
+            <option value="ASSET">Asset</option>
+            <option value="LIABILITY">Liability</option>
+            <option value="EQUITY">Equity</option>
+            <option value="REVENUE">Revenue</option>
+            <option value="EXPENSE">Expense</option>
+          </select>
+          <label>Status:</label>
+          <select id="acct-filter-active" onchange="loadAccounts()">
+            <option value="true">Active</option>
+            <option value="">All</option>
+            <option value="false">Inactive</option>
+          </select>
+        </div>
+
+        <div class="card">
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Number</th><th>Account Name</th><th>Type</th><th>Category</th>
+                  <th>Normal</th><th class="text-right">Debits</th><th class="text-right">Credits</th>
+                  <th class="text-right">Balance</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="accounts-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ JOURNAL ENTRIES VIEW ═══════ -->
+      <div class="view" id="journal-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Journal Entries</div>
+            <div class="page-subtitle">Create and manage journal entries</div>
+          </div>
+          <button class="btn btn-primary" onclick="openJEModal()">+ New Entry</button>
+        </div>
+
+        <div class="filter-bar">
+          <label>From:</label>
+          <input type="date" id="je-filter-from">
+          <label>To:</label>
+          <input type="date" id="je-filter-to">
+          <label>Status:</label>
+          <select id="je-filter-status" onchange="loadJournalEntries()">
+            <option value="">All</option>
+            <option value="true">Posted</option>
+            <option value="false">Draft</option>
+          </select>
+          <input type="text" id="je-filter-search" placeholder="Search..." style="flex:1; min-width: 140px;">
+          <button class="btn btn-sm btn-primary" onclick="loadJournalEntries()">Apply</button>
+        </div>
+
+        <div class="card">
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Entry #</th><th>Date</th><th>Description</th><th>Type</th>
+                  <th class="text-right">Amount</th><th>Status</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="journal-tbody"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="journal-pagination"></div>
+        </div>
+      </div>
+
+      <!-- ═══════ SEARCH VIEW ═══════ -->
+      <div class="view" id="search-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Search Ledger</div>
+            <div class="page-subtitle">Search across all journal entries and line items</div>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="search-query" placeholder="Search description, memo, account name..." style="flex: 2; min-width: 200px;">
+          <label>From:</label>
+          <input type="date" id="search-date-from">
+          <label>To:</label>
+          <input type="date" id="search-date-to">
+          <button class="btn btn-primary" onclick="runSearch(true)">Search</button>
+        </div>
+
+        <div class="card">
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr><th>Entry #</th><th>Date</th><th>Account</th><th>Description</th><th class="text-right">Debit</th><th class="text-right">Credit</th></tr>
+              </thead>
+              <tbody id="search-tbody"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="search-pagination"></div>
+        </div>
+      </div>
+
+      <!-- ═══════ REPORTS VIEW ═══════ -->
+      <div class="view" id="reports-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Financial Reports</div>
+            <div class="page-subtitle">Generate standard financial reports</div>
+          </div>
+        </div>
+
+        <div class="btn-group" style="margin-bottom: 20px;">
+          <button class="btn btn-primary" id="report-btn-pnl" onclick="selectReport('pnl')">Profit & Loss</button>
+          <button class="btn" id="report-btn-bs" onclick="selectReport('bs')">Balance Sheet</button>
+          <button class="btn" id="report-btn-tb" onclick="selectReport('tb')">Trial Balance</button>
+        </div>
+
+        <div class="filter-bar" id="report-filters">
+          <label id="report-date-label-from">From:</label>
+          <input type="date" id="report-date-from">
+          <label id="report-date-label-to">To:</label>
+          <input type="date" id="report-date-to">
+          <button class="btn btn-primary btn-sm" onclick="generateReport()">Generate</button>
+        </div>
+
+        <div class="card" id="report-output">
+          <div class="empty-state">
+            <div class="empty-state-icon">📊</div>
+            <div class="empty-state-text">Select a report type and generate</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ BANK IMPORT VIEW ═══════ -->
+      <div class="view" id="import-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Bank Import</div>
+            <div class="page-subtitle">Upload bank statements to create journal entries</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="dropzone" id="import-dropzone" onclick="document.getElementById('import-file-input').click()">
+            <div class="dropzone-icon">📄</div>
+            <div class="dropzone-text">Drop bank statement files here or click to browse</div>
+            <div class="dropzone-hint">Supports PDF, CSV, TXT (Bank of America, Chase, Interactive Brokers)</div>
+          </div>
+          <input type="file" id="import-file-input" accept=".pdf,.csv,.txt,.tsv" multiple style="display:none" onchange="handleImportUpload(this.files)">
+        </div>
+
+        <div id="import-results" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Parsed Transactions</div>
+              <div class="btn-group">
+                <select id="import-bank-account" class="form-select" style="width:auto;"></select>
+                <button class="btn btn-success" onclick="importToLedger()">Import to Ledger</button>
+              </div>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr><th><input type="checkbox" id="import-select-all" onchange="toggleAllImportRows(this.checked)"></th><th>Date</th><th>Description</th><th>Type</th><th class="text-right">Amount</th></tr>
+                </thead>
+                <tbody id="import-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Import History</div>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr><th>Date</th><th>File</th><th>Bank</th><th>Transactions</th><th>Status</th></tr>
+              </thead>
+              <tbody id="import-history-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main-content -->
+  </div><!-- /app-body -->
+</div><!-- /app-wrapper -->
+
+<!-- ═══════ Account Modal ═══════ -->
+<div class="modal-backdrop" id="account-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="account-modal-title">New Account</div>
+      <button class="modal-close" onclick="closeModal('account-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="acct-edit-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Account Number</label>
+          <input type="text" class="form-input" id="acct-number" placeholder="e.g., 1010">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account Name</label>
+          <input type="text" class="form-input" id="acct-name" placeholder="e.g., Cash - Operating">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Account Type</label>
+          <select class="form-select" id="acct-type" onchange="updateNormalBalance()">
+            <option value="ASSET">Asset</option>
+            <option value="LIABILITY">Liability</option>
+            <option value="EQUITY">Equity</option>
+            <option value="REVENUE">Revenue</option>
+            <option value="EXPENSE">Expense</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Normal Balance</label>
+          <select class="form-select" id="acct-normal">
+            <option value="DEBIT">Debit</option>
+            <option value="CREDIT">Credit</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <input type="text" class="form-input" id="acct-category" placeholder="e.g., Current Assets">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sub-Category</label>
+          <input type="text" class="form-input" id="acct-subcategory" placeholder="e.g., Cash & Equivalents">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-input" id="acct-description" placeholder="Description (optional)"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('account-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAccount()">Save Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ Journal Entry Modal ═══════ -->
+<div class="modal-backdrop" id="je-modal">
+  <div class="modal" style="width: 800px;">
+    <div class="modal-header">
+      <div class="modal-title" id="je-modal-title">New Journal Entry</div>
+      <button class="modal-close" onclick="closeModal('je-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="je-edit-id">
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" id="je-date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="je-type">
+            <option value="STANDARD">Standard</option>
+            <option value="ADJUSTING">Adjusting</option>
+            <option value="CLOSING">Closing</option>
+            <option value="IMPORT">Import</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Post?</label>
+          <select class="form-select" id="je-posted">
+            <option value="false">Draft</option>
+            <option value="true">Posted</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-input" id="je-description" placeholder="Description of the entry">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Memo</label>
+        <textarea class="form-input" id="je-memo" placeholder="Memo (optional)" rows="2"></textarea>
+      </div>
+      <div style="margin-top: 16px;">
+        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <label class="form-label" style="margin:0;">Line Items</label>
+          <button class="btn btn-sm" onclick="addLineItem()">+ Add Line</button>
+        </div>
+        <div style="font-size:11px; color:var(--text-muted); display:grid; grid-template-columns: 2fr 1fr 1fr 1.5fr auto; gap:8px; padding: 0 0 6px; font-weight:600;">
+          <span>Account</span><span>Debit</span><span>Credit</span><span>Description</span><span></span>
+        </div>
+        <div id="je-line-items"></div>
+        <div class="line-totals">
+          <span>Total Debits: <span id="je-total-debits">$0.00</span></span>
+          <span>Total Credits: <span id="je-total-credits">$0.00</span></span>
+          <span id="je-balance-status" class="balance-ok">Balanced ✓</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('je-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveJournalEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ Journal Entry Detail Modal ═══════ -->
+<div class="modal-backdrop" id="je-detail-modal">
+  <div class="modal" style="width: 700px;">
+    <div class="modal-header">
+      <div class="modal-title" id="je-detail-title">Journal Entry</div>
+      <button class="modal-close" onclick="closeModal('je-detail-modal')">&times;</button>
+    </div>
+    <div class="modal-body" id="je-detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('je-detail-modal')">Close</button>
+      <button class="btn btn-primary" id="je-detail-edit-btn" onclick="">Edit</button>
+      <button class="btn btn-danger" id="je-detail-void-btn" onclick="">Void</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ═══════ JavaScript ═══════ -->
+<script>
+(function() {
+  'use strict';
+
+  /* ── State ──────────────────────────────────────────── */
+  const state = {
+    user: null,
+    accounts: [],
+    accountsList: [],
+    dashboardData: null,
+    analyticsData: null,
+    dashboardPeriod: 'ytd',
+    currentView: 'dashboard',
+    jeEntries: [],
+    jePage: 0,
+    jeTotal: 0,
+    jeLimit: 50,
+    searchResults: [],
+    searchPage: 0,
+    searchTotal: 0,
+    searchLimit: 50,
+    selectedReport: 'pnl',
+    importTransactions: [],
+    lineItems: []
+  };
+
+  /* ── API Helper ─────────────────────────────────────── */
+  async function api(url, options = {}) {
+    const defaults = {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    };
+    if (options.body && !(options.body instanceof FormData)) {
+      options.body = JSON.stringify(options.body);
+    }
+    if (options.body instanceof FormData) {
+      delete defaults.headers['Content-Type'];
+    }
+    const resp = await fetch(url, { ...defaults, ...options });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      throw new Error(data.error || `HTTP ${resp.status}`);
+    }
+    return data;
+  }
+
+  /* ── Format Helpers ─────────────────────────────────── */
+  function fmtCurrency(n) {
+    if (n == null || isNaN(n)) return '$0.00';
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+  }
+  function fmtCompact(n) {
+    if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+    if (Math.abs(n) >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
+    return fmtCurrency(n);
+  }
+  function fmtDate(d) {
+    if (!d) return '';
+    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function fmtDateShort(d) {
+    if (!d) return '';
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  /* ── Toast ──────────────────────────────────────────── */
+  function toast(msg, type = 'info') {
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = 'toast ' + type;
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4000);
+  }
+
+  /* ── Auth ────────────────────────────────────────────── */
+  window.doLogin = async function() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+
+    if (!username || !password) {
+      errEl.textContent = 'Please enter username and password';
+      errEl.style.display = 'block';
+      return;
+    }
+    try {
+      document.getElementById('login-btn').disabled = true;
+      const data = await api('/api/login', { method: 'POST', body: { username, password } });
+      state.user = data.user;
+      enterApp();
+    } catch (err) {
+      errEl.textContent = err.message || 'Login failed';
+      errEl.style.display = 'block';
+    } finally {
+      document.getElementById('login-btn').disabled = false;
+    }
+  };
+
+  window.doLogout = async function() {
+    try { await api('/api/logout', { method: 'POST' }); } catch(e) {}
+    state.user = null;
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('app-wrapper').classList.remove('active');
+  };
+
+  window.showRegister = function() {
+    document.getElementById('register-form').style.display = 'block';
+    document.getElementById('login-register-link').style.display = 'none';
+  };
+  window.hideRegister = function() {
+    document.getElementById('register-form').style.display = 'none';
+    document.getElementById('login-register-link').style.display = 'block';
+  };
+
+  window.doRegister = async function() {
+    const fullName = document.getElementById('reg-fullname').value.trim();
+    const username = document.getElementById('reg-username').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+
+    if (!fullName || !username || !password) {
+      errEl.textContent = 'All fields are required';
+      errEl.style.display = 'block';
+      return;
+    }
+    try {
+      const data = await api('/api/register', { method: 'POST', body: { fullName, username, password } });
+      state.user = data.user;
+      enterApp();
+      toast('Account created successfully!', 'success');
+    } catch (err) {
+      errEl.textContent = err.message || 'Registration failed';
+      errEl.style.display = 'block';
+    }
+  };
+
+  async function checkAuth() {
+    try {
+      const data = await api('/api/me');
+      if (data.authenticated && data.user) {
+        state.user = data.user;
+        enterApp();
+        return;
+      }
+    } catch (e) {}
+    document.getElementById('login-screen').classList.remove('hidden');
+  }
+
+  function enterApp() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app-wrapper').classList.add('active');
+    document.getElementById('header-username').textContent = state.user.fullName || state.user.full_name || state.user.username;
+    loadAllAccounts();
+    loadDashboard();
+  }
+
+  /* ── Navigation ─────────────────────────────────────── */
+  window.switchView = function(view) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    const el = document.getElementById(view + '-view');
+    if (el) el.classList.add('active');
+    const nav = document.querySelector(`.nav-link[data-view="${view}"]`);
+    if (nav) nav.classList.add('active');
+    state.currentView = view;
+
+    // Load data for view
+    if (view === 'dashboard') loadDashboard();
+    else if (view === 'accounts') loadAccounts();
+    else if (view === 'journal') loadJournalEntries();
+    else if (view === 'import') loadImportHistory();
+  };
+
+  /* ── Load all accounts (for dropdowns) ──────────────── */
+  async function loadAllAccounts() {
+    try {
+      const data = await api('/api/accounts?isActive=true');
+      state.accountsList = data.data || [];
+    } catch (e) {
+      console.error('Failed to load accounts list:', e);
+    }
+  }
+
+  function accountOptions() {
+    return state.accountsList.map(a =>
+      `<option value="${a.id}">${a.account_number ? a.account_number + ' - ' : ''}${escHtml(a.account_name)}</option>`
+    ).join('');
+  }
+
+  /* ── Dashboard ──────────────────────────────────────── */
+  async function loadDashboard() {
+    const dateEl = document.getElementById('dashboard-date');
+    dateEl.textContent = 'As of ' + new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    try {
+      const [dashRes, analyticsRes] = await Promise.all([
+        api('/api/dashboard'),
+        api('/api/reports/analytics?yearsBack=2')
+      ]);
+      state.dashboardData = dashRes.data;
+      state.analyticsData = analyticsRes.data;
+      renderDashboard();
+    } catch (err) {
+      toast('Failed to load dashboard: ' + err.message, 'error');
+    }
+  }
+
+  function renderDashboard() {
+    const d = state.dashboardData;
+    if (!d) return;
+
+    // KPIs based on period
+    const p = state.dashboardPeriod;
+    let revenue, expenses, netIncome, priorRev, priorExp, priorNet, label;
+    if (p === 'month') {
+      revenue = d.monthRevenue; expenses = d.monthExpenses; netIncome = d.monthNetIncome;
+      priorRev = d.priorMonthRevenue; priorExp = d.priorMonthExpenses; priorNet = d.priorMonthNetIncome;
+      label = 'This Month';
+    } else if (p === 'quarter') {
+      revenue = d.quarterRevenue; expenses = d.quarterExpenses; netIncome = d.quarterNetIncome;
+      priorRev = d.priorQuarterRevenue; priorExp = d.priorQuarterExpenses; priorNet = d.priorQuarterNetIncome;
+      label = 'This Quarter';
+    } else {
+      revenue = d.ytdRevenue; expenses = d.ytdExpenses; netIncome = d.ytdNetIncome;
+      priorRev = d.priorYtdRevenue; priorExp = d.priorYtdExpenses; priorNet = d.priorYtdNetIncome;
+      label = 'Year-to-Date';
+    }
+
+    function pctChange(cur, prev) {
+      if (!prev || prev === 0) return '';
+      const pct = ((cur - prev) / Math.abs(prev) * 100).toFixed(1);
+      const cls = pct >= 0 ? 'up' : 'down';
+      const arrow = pct >= 0 ? '↑' : '↓';
+      return `<div class="kpi-change ${cls}">${arrow} ${Math.abs(pct)}% vs prior period</div>`;
+    }
+
+    document.getElementById('dashboard-kpis').innerHTML = `
+      <div class="kpi-card">
+        <div class="kpi-label">${label} Revenue</div>
+        <div class="kpi-value positive">${fmtCurrency(revenue)}</div>
+        ${pctChange(revenue, priorRev)}
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">${label} Expenses</div>
+        <div class="kpi-value">${fmtCurrency(expenses)}</div>
+        ${pctChange(expenses, priorExp)}
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">${label} Net Income</div>
+        <div class="kpi-value ${netIncome >= 0 ? 'positive' : 'negative'}">${fmtCurrency(netIncome)}</div>
+        ${pctChange(netIncome, priorNet)}
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Cash Position</div>
+        <div class="kpi-value">${fmtCurrency(d.cashPosition)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Active Accounts</div>
+        <div class="kpi-value">${d.totalAccounts}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Journal Entries</div>
+        <div class="kpi-value">${d.totalEntries}</div>
+        ${d.draftCount > 0 ? `<div class="kpi-change">${d.draftCount} drafts pending</div>` : ''}
+      </div>
+    `;
+
+    // Charts
+    renderDashboardCharts();
+
+    // Expense categories
+    renderExpenseCategories();
+
+    // Recent entries
+    const tbody = document.getElementById('dashboard-recent-body');
+    if (!d.recentEntries || d.recentEntries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:20px;">No entries yet</td></tr>';
+    } else {
+      tbody.innerHTML = d.recentEntries.slice(0, 10).map(e => `
+        <tr style="cursor:pointer;" onclick="viewJournalEntry(${e.id})">
+          <td><strong>${escHtml(e.entry_number)}</strong></td>
+          <td>${fmtDate(e.entry_date)}</td>
+          <td>${escHtml(e.description || '')}</td>
+          <td><span class="tag tag-gray">${escHtml(e.entry_type)}</span></td>
+          <td class="text-right">${fmtCurrency(parseFloat(e.total_amount))}</td>
+          <td>${e.is_posted ? '<span class="tag tag-green">Posted</span>' : '<span class="tag tag-yellow">Draft</span>'}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  window.setDashboardPeriod = function(period) {
+    state.dashboardPeriod = period;
+    document.querySelectorAll('#dashboard-period-toggle .period-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`#dashboard-period-toggle .period-btn[onclick*="${period}"]`).classList.add('active');
+    renderDashboard();
+  };
+
+  /* ── SVG Charts ─────────────────────────────────────── */
+  function renderDashboardCharts() {
+    const a = state.analyticsData;
+    if (!a || !a.monthlyData || a.monthlyData.length === 0) {
+      document.getElementById('dashboard-charts').innerHTML = '';
+      return;
+    }
+
+    // Take last 12 months for charts
+    const recent = a.monthlyData.slice(-12);
+    const monthNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // Revenue vs Expenses bar chart
+    const barSvg = renderBarChart(recent, monthNames);
+    // Net Income line chart
+    const lineSvg = renderLineChart(recent, monthNames);
+
+    document.getElementById('dashboard-charts').innerHTML = `
+      <div class="chart-container">
+        <div class="chart-title">Revenue vs Expenses (Last 12 Months)</div>
+        ${barSvg}
+      </div>
+      <div class="chart-container">
+        <div class="chart-title">Net Income Trend</div>
+        ${lineSvg}
+      </div>
+    `;
+  }
+
+  function renderBarChart(data, monthNames) {
+    const W = 500, H = 250, pad = { t: 20, r: 20, b: 40, l: 60 };
+    const cW = W - pad.l - pad.r;
+    const cH = H - pad.t - pad.b;
+
+    const maxVal = Math.max(1, ...data.map(d => Math.max(d.totalRevenue, d.totalExpenses)));
+    const barW = Math.max(6, cW / data.length / 3);
+    const groupW = cW / data.length;
+
+    let bars = '';
+    let labels = '';
+    data.forEach((d, i) => {
+      const x = pad.l + i * groupW + groupW / 2;
+      const rH = (d.totalRevenue / maxVal) * cH;
+      const eH = (d.totalExpenses / maxVal) * cH;
+
+      bars += `<rect x="${x - barW - 1}" y="${pad.t + cH - rH}" width="${barW}" height="${rH}" fill="#2563eb" rx="2" opacity="0.85"><title>Revenue: ${fmtCurrency(d.totalRevenue)}</title></rect>`;
+      bars += `<rect x="${x + 1}" y="${pad.t + cH - eH}" width="${barW}" height="${eH}" fill="#f59e0b" rx="2" opacity="0.85"><title>Expenses: ${fmtCurrency(d.totalExpenses)}</title></rect>`;
+
+      const mo = parseInt(d.label.substring(5));
+      let shortLabel = monthNames[mo] || d.label.substring(5);
+      if (mo === 1) shortLabel += "'" + d.label.substring(2, 4);
+      labels += `<text x="${x}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#94a3b8">${shortLabel}</text>`;
+    });
+
+    // Y-axis
+    let yAxis = '';
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.t + cH - (i / 4) * cH;
+      const val = (maxVal / 4) * i;
+      yAxis += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="#e2e8f0" stroke-dasharray="2,2"/>`;
+      yAxis += `<text x="${pad.l - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#94a3b8">${fmtCompact(val)}</text>`;
+    }
+
+    // Legend
+    const legend = `
+      <rect x="${W - 140}" y="4" width="10" height="10" fill="#2563eb" rx="2"/>
+      <text x="${W - 126}" y="13" font-size="10" fill="#64748b">Revenue</text>
+      <rect x="${W - 72}" y="4" width="10" height="10" fill="#f59e0b" rx="2"/>
+      <text x="${W - 58}" y="13" font-size="10" fill="#64748b">Expenses</text>
+    `;
+
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${yAxis}${bars}${labels}${legend}</svg>`;
+  }
+
+  function renderLineChart(data, monthNames) {
+    const W = 500, H = 250, pad = { t: 20, r: 20, b: 40, l: 60 };
+    const cW = W - pad.l - pad.r;
+    const cH = H - pad.t - pad.b;
+
+    const values = data.map(d => d.netIncome);
+    const maxVal = Math.max(1, ...values.map(v => Math.abs(v)));
+    const minVal = -maxVal;
+    const range = maxVal - minVal;
+
+    let points = '';
+    let areaPoints = '';
+    let dots = '';
+    let labels = '';
+
+    data.forEach((d, i) => {
+      const x = pad.l + (i / (data.length - 1 || 1)) * cW;
+      const y = pad.t + cH - ((d.netIncome - minVal) / range) * cH;
+      points += `${x},${y} `;
+      if (i === 0) areaPoints = `${x},${pad.t + cH} `;
+      areaPoints += `${x},${y} `;
+      if (i === data.length - 1) areaPoints += `${x},${pad.t + cH}`;
+      dots += `<circle cx="${x}" cy="${y}" r="3" fill="${d.netIncome >= 0 ? '#10b981' : '#ef4444'}" stroke="#fff" stroke-width="1.5"><title>${fmtCurrency(d.netIncome)}</title></circle>`;
+
+      if (i % 2 === 0 || data.length <= 6) {
+        const mo = parseInt(d.label.substring(5));
+        let shortLabel = monthNames[mo] || d.label.substring(5);
+        if (mo === 1) shortLabel += "'" + d.label.substring(2, 4);
+        labels += `<text x="${x}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#94a3b8">${shortLabel}</text>`;
+      }
+    });
+
+    // Zero line
+    const zeroY = pad.t + cH - ((0 - minVal) / range) * cH;
+
+    // Y-axis
+    let yAxis = '';
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.t + (i / 4) * cH;
+      const val = maxVal - (i / 4) * range;
+      yAxis += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="#e2e8f0" stroke-dasharray="2,2"/>`;
+      yAxis += `<text x="${pad.l - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#94a3b8">${fmtCompact(val)}</text>`;
+    }
+
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      ${yAxis}
+      <line x1="${pad.l}" y1="${zeroY}" x2="${W - pad.r}" y2="${zeroY}" stroke="#94a3b8" stroke-dasharray="4,2" opacity="0.5"/>
+      <polygon points="${areaPoints}" fill="url(#lineGrad)" opacity="0.15"/>
+      <polyline points="${points}" fill="none" stroke="#10b981" stroke-width="2" stroke-linejoin="round"/>
+      ${dots}
+      ${labels}
+      <defs><linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#10b981" stop-opacity="0"/></linearGradient></defs>
+    </svg>`;
+  }
+
+  function renderExpenseCategories() {
+    const a = state.analyticsData;
+    if (!a || !a.topExpenseCategories || a.topExpenseCategories.length === 0) {
+      document.getElementById('expense-categories').innerHTML = '<div class="text-muted" style="padding:12px;">No expense data</div>';
+      return;
+    }
+    const max = Math.max(1, ...a.topExpenseCategories.map(c => c.total));
+    document.getElementById('expense-categories').innerHTML = a.topExpenseCategories.map(c => `
+      <div class="expense-bar-row">
+        <div class="expense-bar-label" title="${escHtml(c.category)}">${escHtml(c.category)}</div>
+        <div class="expense-bar-track"><div class="expense-bar-fill" style="width:${(c.total / max * 100).toFixed(1)}%"></div></div>
+        <div class="expense-bar-amount">${fmtCurrency(c.total)}</div>
+      </div>
+    `).join('');
+  }
+
+  /* ── Chart of Accounts ──────────────────────────────── */
+  window.loadAccounts = async function() {
+    try {
+      const type = document.getElementById('acct-filter-type').value;
+      const isActive = document.getElementById('acct-filter-active').value;
+      let url = '/api/accounts?';
+      if (type) url += `type=${type}&`;
+      if (isActive) url += `isActive=${isActive}&`;
+      const data = await api(url);
+      state.accounts = data.data || [];
+      renderAccounts();
+    } catch (err) {
+      toast('Failed to load accounts: ' + err.message, 'error');
+    }
+  };
+
+  function renderAccounts() {
+    const tbody = document.getElementById('accounts-tbody');
+    if (state.accounts.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding:30px;">No accounts found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = state.accounts.map(a => {
+      const bal = parseFloat(a.balance || 0);
+      const typeClass = 'type-' + (a.account_type || '').toLowerCase();
+      return `
+        <tr>
+          <td>${escHtml(a.account_number || '')}</td>
+          <td><strong>${escHtml(a.account_name)}</strong></td>
+          <td><span class="tag tag-blue ${typeClass}">${a.account_type}</span></td>
+          <td class="text-muted">${escHtml(a.category || '')}</td>
+          <td>${a.normal_balance}</td>
+          <td class="amount text-right">${fmtCurrency(parseFloat(a.total_debits || 0))}</td>
+          <td class="amount text-right">${fmtCurrency(parseFloat(a.total_credits || 0))}</td>
+          <td class="amount text-right" style="font-weight:600;">${fmtCurrency(bal)}</td>
+          <td><button class="btn btn-sm" onclick="editAccount(${a.id})">Edit</button></td>
+        </tr>`;
+    }).join('');
+  }
+
+  window.openAccountModal = function(account) {
+    document.getElementById('account-modal-title').textContent = account ? 'Edit Account' : 'New Account';
+    document.getElementById('acct-edit-id').value = account ? account.id : '';
+    document.getElementById('acct-number').value = account ? (account.account_number || '') : '';
+    document.getElementById('acct-name').value = account ? (account.account_name || '') : '';
+    document.getElementById('acct-type').value = account ? (account.account_type || 'ASSET') : 'ASSET';
+    document.getElementById('acct-normal').value = account ? (account.normal_balance || 'DEBIT') : 'DEBIT';
+    document.getElementById('acct-category').value = account ? (account.category || '') : '';
+    document.getElementById('acct-subcategory').value = account ? (account.sub_category || '') : '';
+    document.getElementById('acct-description').value = account ? (account.description || '') : '';
+    document.getElementById('account-modal').classList.add('active');
+  };
+
+  window.editAccount = async function(id) {
+    try {
+      const data = await api(`/api/accounts/${id}`);
+      openAccountModal(data.data);
+    } catch (err) {
+      toast('Failed to load account: ' + err.message, 'error');
+    }
+  };
+
+  window.saveAccount = async function() {
+    const id = document.getElementById('acct-edit-id').value;
+    const body = {
+      account_number: document.getElementById('acct-number').value.trim(),
+      account_name: document.getElementById('acct-name').value.trim(),
+      account_type: document.getElementById('acct-type').value,
+      normal_balance: document.getElementById('acct-normal').value,
+      category: document.getElementById('acct-category').value.trim(),
+      sub_category: document.getElementById('acct-subcategory').value.trim(),
+      description: document.getElementById('acct-description').value.trim()
+    };
+
+    if (!body.account_name) { toast('Account name is required', 'error'); return; }
+
+    try {
+      if (id) {
+        await api(`/api/accounts/${id}`, { method: 'PUT', body });
+        toast('Account updated', 'success');
+      } else {
+        await api('/api/accounts', { method: 'POST', body });
+        toast('Account created', 'success');
+      }
+      closeModal('account-modal');
+      loadAccounts();
+      loadAllAccounts();
+    } catch (err) {
+      toast('Failed to save account: ' + err.message, 'error');
+    }
+  };
+
+  window.updateNormalBalance = function() {
+    const type = document.getElementById('acct-type').value;
+    const normal = (type === 'ASSET' || type === 'EXPENSE') ? 'DEBIT' : 'CREDIT';
+    document.getElementById('acct-normal').value = normal;
+  };
+
+  /* ── Journal Entries ────────────────────────────────── */
+  window.loadJournalEntries = async function() {
+    try {
+      let url = `/api/journal-entries?limit=${state.jeLimit}&offset=${state.jePage * state.jeLimit}`;
+      const from = document.getElementById('je-filter-from').value;
+      const to = document.getElementById('je-filter-to').value;
+      const status = document.getElementById('je-filter-status').value;
+      const search = document.getElementById('je-filter-search').value.trim();
+      if (from) url += `&startDate=${from}`;
+      if (to) url += `&endDate=${to}`;
+      if (status) url += `&isPosted=${status}`;
+      if (search) url += `&search=${encodeURIComponent(search)}`;
+
+      const data = await api(url);
+      state.jeEntries = data.data.entries || [];
+      state.jeTotal = data.data.total || 0;
+      renderJournalEntries();
+    } catch (err) {
+      toast('Failed to load entries: ' + err.message, 'error');
+    }
+  };
+
+  function renderJournalEntries() {
+    const tbody = document.getElementById('journal-tbody');
+    if (state.jeEntries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:30px;">No journal entries found</td></tr>';
+      document.getElementById('journal-pagination').innerHTML = '';
+      return;
+    }
+
+    tbody.innerHTML = state.jeEntries.map(e => `
+      <tr style="cursor:pointer;" onclick="viewJournalEntry(${e.id})">
+        <td><strong>${escHtml(e.entry_number)}</strong></td>
+        <td>${fmtDate(e.entry_date)}</td>
+        <td>${escHtml(e.description || '')}</td>
+        <td><span class="tag tag-gray">${escHtml(e.entry_type)}</span></td>
+        <td class="text-right">${fmtCurrency(parseFloat(e.total_amount || 0))}</td>
+        <td>${e.is_posted ? '<span class="tag tag-green">Posted</span>' :
+              e.is_void ? '<span class="tag tag-red">Void</span>' :
+              '<span class="tag tag-yellow">Draft</span>'}</td>
+        <td></td>
+      </tr>
+    `).join('');
+
+    // Pagination
+    const totalPages = Math.ceil(state.jeTotal / state.jeLimit);
+    const pg = document.getElementById('journal-pagination');
+    if (totalPages <= 1) { pg.innerHTML = ''; return; }
+    pg.innerHTML = `
+      <button class="btn btn-sm" ${state.jePage === 0 ? 'disabled' : ''} onclick="jePageChange(${state.jePage - 1})">← Prev</button>
+      <span class="pagination-info">Page ${state.jePage + 1} of ${totalPages} (${state.jeTotal} entries)</span>
+      <button class="btn btn-sm" ${state.jePage >= totalPages - 1 ? 'disabled' : ''} onclick="jePageChange(${state.jePage + 1})">Next →</button>
+    `;
+  }
+
+  window.jePageChange = function(page) {
+    state.jePage = page;
+    loadJournalEntries();
+  };
+
+  window.viewJournalEntry = async function(id) {
+    try {
+      const data = await api(`/api/journal-entries/${id}`);
+      const e = data.data;
+      const items = e.line_items || [];
+
+      document.getElementById('je-detail-title').textContent = e.entry_number || 'Journal Entry';
+      document.getElementById('je-detail-body').innerHTML = `
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <div><strong>Date:</strong> ${fmtDate(e.entry_date)}</div>
+          <div><strong>Type:</strong> ${escHtml(e.entry_type)}</div>
+          <div><strong>Status:</strong> ${e.is_posted ? '<span class="tag tag-green">Posted</span>' :
+            e.is_void ? '<span class="tag tag-red">Void</span>' : '<span class="tag tag-yellow">Draft</span>'}</div>
+          <div><strong>Source:</strong> ${escHtml(e.source || 'Manual')}</div>
+        </div>
+        <div style="margin-bottom: 16px;"><strong>Description:</strong> ${escHtml(e.description || 'N/A')}</div>
+        ${e.memo ? `<div style="margin-bottom: 16px;"><strong>Memo:</strong> ${escHtml(e.memo)}</div>` : ''}
+        <table class="data-table">
+          <thead><tr><th>Account</th><th class="text-right">Debit</th><th class="text-right">Credit</th><th>Description</th></tr></thead>
+          <tbody>
+            ${items.map(li => `
+              <tr>
+                <td>${escHtml(li.account_name || 'Account #' + li.account_id)}</td>
+                <td class="amount text-right">${parseFloat(li.debit_amount) > 0 ? fmtCurrency(parseFloat(li.debit_amount)) : ''}</td>
+                <td class="amount text-right">${parseFloat(li.credit_amount) > 0 ? fmtCurrency(parseFloat(li.credit_amount)) : ''}</td>
+                <td class="text-muted">${escHtml(li.description || '')}</td>
+              </tr>
+            `).join('')}
+            <tr class="report-total-row">
+              <td><strong>Totals</strong></td>
+              <td class="amount text-right"><strong>${fmtCurrency(items.reduce((s, li) => s + parseFloat(li.debit_amount || 0), 0))}</strong></td>
+              <td class="amount text-right"><strong>${fmtCurrency(items.reduce((s, li) => s + parseFloat(li.credit_amount || 0), 0))}</strong></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+
+      document.getElementById('je-detail-edit-btn').onclick = () => { closeModal('je-detail-modal'); editJournalEntry(e); };
+      document.getElementById('je-detail-void-btn').onclick = () => { voidJournalEntry(e.id); };
+      document.getElementById('je-detail-void-btn').style.display = e.is_void ? 'none' : '';
+      document.getElementById('je-detail-edit-btn').style.display = e.is_void ? 'none' : '';
+
+      openModal('je-detail-modal');
+    } catch (err) {
+      toast('Failed to load entry: ' + err.message, 'error');
+    }
+  };
+
+  async function voidJournalEntry(id) {
+    if (!confirm('Are you sure you want to void this entry? This cannot be undone.')) return;
+    try {
+      await api(`/api/journal-entries/${id}`, { method: 'DELETE' });
+      toast('Entry voided', 'success');
+      closeModal('je-detail-modal');
+      if (state.currentView === 'journal') loadJournalEntries();
+      if (state.currentView === 'dashboard') loadDashboard();
+    } catch (err) {
+      toast('Failed to void entry: ' + err.message, 'error');
+    }
+  }
+
+  /* ── JE Modal (Create/Edit) ─────────────────────────── */
+  window.openJEModal = function(entry) {
+    document.getElementById('je-modal-title').textContent = entry ? 'Edit Journal Entry' : 'New Journal Entry';
+    document.getElementById('je-edit-id').value = entry ? entry.id : '';
+    document.getElementById('je-date').value = entry ? (entry.entry_date || '').substring(0, 10) : new Date().toISOString().substring(0, 10);
+    document.getElementById('je-type').value = entry ? (entry.entry_type || 'STANDARD') : 'STANDARD';
+    document.getElementById('je-posted').value = entry ? String(entry.is_posted) : 'false';
+    document.getElementById('je-description').value = entry ? (entry.description || '') : '';
+    document.getElementById('je-memo').value = entry ? (entry.memo || '') : '';
+
+    // Line items
+    state.lineItems = [];
+    if (entry && entry.line_items && entry.line_items.length > 0) {
+      state.lineItems = entry.line_items.map(li => ({
+        account_id: li.account_id,
+        debit_amount: parseFloat(li.debit_amount || 0),
+        credit_amount: parseFloat(li.credit_amount || 0),
+        description: li.description || ''
+      }));
+    } else {
+      state.lineItems = [
+        { account_id: '', debit_amount: 0, credit_amount: 0, description: '' },
+        { account_id: '', debit_amount: 0, credit_amount: 0, description: '' }
+      ];
+    }
+    renderLineItems();
+    openModal('je-modal');
+  };
+
+  function editJournalEntry(entry) {
+    openJEModal(entry);
+  }
+
+  window.addLineItem = function() {
+    state.lineItems.push({ account_id: '', debit_amount: 0, credit_amount: 0, description: '' });
+    renderLineItems();
+  };
+
+  function renderLineItems() {
+    const container = document.getElementById('je-line-items');
+    const opts = accountOptions();
+    container.innerHTML = state.lineItems.map((li, i) => `
+      <div class="line-item-row">
+        <select onchange="updateLineItem(${i},'account_id',this.value)">
+          <option value="">-- Select Account --</option>
+          ${opts}
+        </select>
+        <input type="number" step="0.01" min="0" value="${li.debit_amount || ''}" placeholder="0.00" onchange="updateLineItem(${i},'debit_amount',this.value)">
+        <input type="number" step="0.01" min="0" value="${li.credit_amount || ''}" placeholder="0.00" onchange="updateLineItem(${i},'credit_amount',this.value)">
+        <input type="text" value="${escHtml(li.description || '')}" placeholder="Description" onchange="updateLineItem(${i},'description',this.value)">
+        <button class="remove-line-btn" onclick="removeLineItem(${i})" title="Remove">✕</button>
+      </div>
+    `).join('');
+
+    // Set selected accounts
+    const selects = container.querySelectorAll('select');
+    state.lineItems.forEach((li, i) => {
+      if (selects[i] && li.account_id) selects[i].value = li.account_id;
+    });
+
+    updateLineTotals();
+  }
+
+  window.updateLineItem = function(idx, field, value) {
+    if (field === 'debit_amount' || field === 'credit_amount') {
+      state.lineItems[idx][field] = parseFloat(value) || 0;
+    } else {
+      state.lineItems[idx][field] = value;
+    }
+    updateLineTotals();
+  };
+
+  window.removeLineItem = function(idx) {
+    if (state.lineItems.length <= 2) { toast('Minimum 2 line items required', 'error'); return; }
+    state.lineItems.splice(idx, 1);
+    renderLineItems();
+  };
+
+  function updateLineTotals() {
+    const totalD = state.lineItems.reduce((s, li) => s + (li.debit_amount || 0), 0);
+    const totalC = state.lineItems.reduce((s, li) => s + (li.credit_amount || 0), 0);
+    document.getElementById('je-total-debits').textContent = fmtCurrency(totalD);
+    document.getElementById('je-total-credits').textContent = fmtCurrency(totalC);
+    const balanced = Math.abs(totalD - totalC) < 0.005;
+    const statusEl = document.getElementById('je-balance-status');
+    statusEl.textContent = balanced ? 'Balanced ✓' : 'Unbalanced ✗ (Diff: ' + fmtCurrency(Math.abs(totalD - totalC)) + ')';
+    statusEl.className = balanced ? 'balance-ok' : 'balance-off';
+  }
+
+  window.saveJournalEntry = async function() {
+    const id = document.getElementById('je-edit-id').value;
+    const body = {
+      entry_date: document.getElementById('je-date').value,
+      description: document.getElementById('je-description').value.trim(),
+      entry_type: document.getElementById('je-type').value,
+      memo: document.getElementById('je-memo').value.trim(),
+      is_posted: document.getElementById('je-posted').value === 'true',
+      line_items: state.lineItems.filter(li => li.account_id)
+    };
+
+    if (!body.entry_date) { toast('Date is required', 'error'); return; }
+    if (body.line_items.length < 2) { toast('At least 2 line items are required', 'error'); return; }
+
+    const totalD = body.line_items.reduce((s, li) => s + (li.debit_amount || 0), 0);
+    const totalC = body.line_items.reduce((s, li) => s + (li.credit_amount || 0), 0);
+    if (Math.abs(totalD - totalC) > 0.005) { toast('Debits must equal credits', 'error'); return; }
+
+    try {
+      if (id) {
+        await api(`/api/journal-entries/${id}`, { method: 'PUT', body });
+        toast('Entry updated', 'success');
+      } else {
+        await api('/api/journal-entries', { method: 'POST', body });
+        toast('Entry created', 'success');
+      }
+      closeModal('je-modal');
+      if (state.currentView === 'journal') loadJournalEntries();
+      if (state.currentView === 'dashboard') loadDashboard();
+    } catch (err) {
+      toast('Failed to save entry: ' + err.message, 'error');
+    }
+  };
+
+  /* ── Search ─────────────────────────────────────────── */
+  window.runSearch = async function(reset) {
+    if (reset) { state.searchPage = 0; }
+    const query = document.getElementById('search-query').value.trim();
+    if (!query) { toast('Please enter a search term', 'error'); return; }
+
+    try {
+      const body = {
+        query,
+        startDate: document.getElementById('search-date-from').value || undefined,
+        endDate: document.getElementById('search-date-to').value || undefined,
+        limit: state.searchLimit,
+        offset: state.searchPage * state.searchLimit
+      };
+      const data = await api('/api/journal-entries/search', { method: 'POST', body });
+      state.searchResults = data.data.results || [];
+      state.searchTotal = data.data.total || 0;
+      renderSearchResults();
+    } catch (err) {
+      toast('Search failed: ' + err.message, 'error');
+    }
+  };
+
+  function renderSearchResults() {
+    const tbody = document.getElementById('search-tbody');
+    if (state.searchResults.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:30px;">No results found</td></tr>';
+      document.getElementById('search-pagination').innerHTML = '';
+      return;
+    }
+
+    tbody.innerHTML = state.searchResults.map(r => `
+      <tr style="cursor:pointer;" onclick="viewJournalEntry(${r.journal_entry_id || r.id})">
+        <td><strong>${escHtml(r.entry_number || '')}</strong></td>
+        <td>${fmtDate(r.entry_date)}</td>
+        <td>${escHtml(r.account_name || '')}</td>
+        <td>${escHtml(r.description || r.je_description || '')}</td>
+        <td class="amount text-right">${parseFloat(r.debit_amount) > 0 ? fmtCurrency(parseFloat(r.debit_amount)) : ''}</td>
+        <td class="amount text-right">${parseFloat(r.credit_amount) > 0 ? fmtCurrency(parseFloat(r.credit_amount)) : ''}</td>
+      </tr>
+    `).join('');
+
+    const totalPages = Math.ceil(state.searchTotal / state.searchLimit);
+    const pg = document.getElementById('search-pagination');
+    if (totalPages <= 1) { pg.innerHTML = ''; return; }
+    pg.innerHTML = `
+      <button class="btn btn-sm" ${state.searchPage === 0 ? 'disabled' : ''} onclick="searchPageChange(${state.searchPage - 1})">← Prev</button>
+      <span class="pagination-info">Page ${state.searchPage + 1} of ${totalPages} (${state.searchTotal} results)</span>
+      <button class="btn btn-sm" ${state.searchPage >= totalPages - 1 ? 'disabled' : ''} onclick="searchPageChange(${state.searchPage + 1})">Next →</button>
+    `;
+  }
+
+  window.searchPageChange = function(page) {
+    state.searchPage = page;
+    runSearch(false);
+  };
+
+  /* ── Reports ────────────────────────────────────────── */
+  window.selectReport = function(type) {
+    state.selectedReport = type;
+    document.querySelectorAll('[id^="report-btn-"]').forEach(b => b.classList.remove('btn-primary'));
+    document.getElementById('report-btn-' + type).classList.add('btn-primary');
+
+    // Toggle date fields
+    const fromLabel = document.getElementById('report-date-label-from');
+    const toLabel = document.getElementById('report-date-label-to');
+    const fromInput = document.getElementById('report-date-from');
+    const toInput = document.getElementById('report-date-to');
+
+    if (type === 'pnl') {
+      fromLabel.textContent = 'From:'; toLabel.textContent = 'To:';
+      fromLabel.style.display = ''; toLabel.style.display = '';
+      fromInput.style.display = ''; toInput.style.display = '';
+    } else {
+      fromLabel.textContent = 'As of:'; toLabel.style.display = 'none';
+      fromLabel.style.display = ''; fromInput.style.display = '';
+      toInput.style.display = 'none';
+    }
+  };
+
+  window.generateReport = async function() {
+    const type = state.selectedReport;
+    const output = document.getElementById('report-output');
+    output.innerHTML = '<div class="loading-overlay"><div class="spinner"></div> Generating report...</div>';
+
+    try {
+      let data;
+      if (type === 'pnl') {
+        const from = document.getElementById('report-date-from').value;
+        const to = document.getElementById('report-date-to').value;
+        let url = '/api/reports/pnl?';
+        if (from) url += `startDate=${from}&`;
+        if (to) url += `endDate=${to}&`;
+        data = await api(url);
+        renderPnlReport(data.data);
+      } else if (type === 'bs') {
+        const asOf = document.getElementById('report-date-from').value;
+        let url = '/api/reports/balance-sheet?';
+        if (asOf) url += `asOfDate=${asOf}&`;
+        data = await api(url);
+        renderBalanceSheet(data.data);
+      } else if (type === 'tb') {
+        const asOf = document.getElementById('report-date-from').value;
+        let url = '/api/reports/trial-balance?';
+        if (asOf) url += `asOfDate=${asOf}&`;
+        data = await api(url);
+        renderTrialBalance(data.data);
+      }
+    } catch (err) {
+      output.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Error: ${escHtml(err.message)}</div></div>`;
+    }
+  };
+
+  function renderPnlReport(d) {
+    const output = document.getElementById('report-output');
+    const period = d.startDate && d.endDate ? `${fmtDate(d.startDate)} — ${fmtDate(d.endDate)}` : 'All Time';
+
+    output.innerHTML = `
+      <h3 style="text-align:center; margin-bottom:4px;">Profit & Loss Statement</h3>
+      <div style="text-align:center; color:var(--text-muted); font-size:13px; margin-bottom:24px;">${period}</div>
+
+      <div class="report-section">
+        <div class="report-section-title">Revenue</div>
+        <table class="data-table">
+          <thead><tr><th>Account #</th><th>Account Name</th><th>Category</th><th class="text-right">Amount</th></tr></thead>
+          <tbody>
+            ${d.revenue.accounts.map(a => `
+              <tr><td>${escHtml(a.account_number || '')}</td><td>${escHtml(a.account_name)}</td><td class="text-muted">${escHtml(a.category || '')}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
+            `).join('')}
+            <tr class="report-total-row"><td colspan="3"><strong>Total Revenue</strong></td><td class="amount text-right"><strong>${fmtCurrency(d.revenue.total)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="report-section">
+        <div class="report-section-title">Expenses</div>
+        <table class="data-table">
+          <thead><tr><th>Account #</th><th>Account Name</th><th>Category</th><th class="text-right">Amount</th></tr></thead>
+          <tbody>
+            ${d.expenses.accounts.map(a => `
+              <tr><td>${escHtml(a.account_number || '')}</td><td>${escHtml(a.account_name)}</td><td class="text-muted">${escHtml(a.category || '')}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
+            `).join('')}
+            <tr class="report-total-row"><td colspan="3"><strong>Total Expenses</strong></td><td class="amount text-right"><strong>${fmtCurrency(d.expenses.total)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="report-section">
+        <table class="data-table">
+          <tbody>
+            <tr class="report-grand-total"><td colspan="3"><strong>Net Income</strong></td><td class="amount text-right ${d.netIncome >= 0 ? 'text-success' : 'text-danger'}"><strong>${fmtCurrency(d.netIncome)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderBalanceSheet(d) {
+    const output = document.getElementById('report-output');
+    output.innerHTML = `
+      <h3 style="text-align:center; margin-bottom:4px;">Balance Sheet</h3>
+      <div style="text-align:center; color:var(--text-muted); font-size:13px; margin-bottom:24px;">As of ${fmtDate(d.asOfDate)}</div>
+
+      <div class="report-section">
+        <div class="report-section-title">Assets</div>
+        <table class="data-table">
+          <thead><tr><th>Account #</th><th>Account Name</th><th>Category</th><th class="text-right">Balance</th></tr></thead>
+          <tbody>
+            ${d.assets.accounts.map(a => `
+              <tr><td>${escHtml(a.account_number || '')}</td><td>${escHtml(a.account_name)}</td><td class="text-muted">${escHtml(a.category || '')}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
+            `).join('')}
+            <tr class="report-total-row"><td colspan="3"><strong>Total Assets</strong></td><td class="amount text-right"><strong>${fmtCurrency(d.assets.total)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="report-section">
+        <div class="report-section-title">Liabilities</div>
+        <table class="data-table">
+          <thead><tr><th>Account #</th><th>Account Name</th><th>Category</th><th class="text-right">Balance</th></tr></thead>
+          <tbody>
+            ${d.liabilities.accounts.length > 0 ? d.liabilities.accounts.map(a => `
+              <tr><td>${escHtml(a.account_number || '')}</td><td>${escHtml(a.account_name)}</td><td class="text-muted">${escHtml(a.category || '')}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
+            `).join('') : '<tr><td colspan="4" class="text-muted text-center">No liabilities</td></tr>'}
+            <tr class="report-total-row"><td colspan="3"><strong>Total Liabilities</strong></td><td class="amount text-right"><strong>${fmtCurrency(d.liabilities.total)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="report-section">
+        <div class="report-section-title">Equity</div>
+        <table class="data-table">
+          <thead><tr><th>Account #</th><th>Account Name</th><th>Category</th><th class="text-right">Balance</th></tr></thead>
+          <tbody>
+            ${d.equity.accounts.map(a => `
+              <tr><td>${escHtml(a.account_number || '')}</td><td>${escHtml(a.account_name)}</td><td class="text-muted">${escHtml(a.category || '')}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
+            `).join('')}
+            <tr><td></td><td><em>Current Earnings</em></td><td class="text-muted">Retained Earnings</td><td class="amount text-right"><em>${fmtCurrency(d.equity.currentEarnings)}</em></td></tr>
+            <tr class="report-total-row"><td colspan="3"><strong>Total Equity</strong></td><td class="amount text-right"><strong>${fmtCurrency(d.equity.totalWithEarnings)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="report-section">
+        <table class="data-table">
+          <tbody>
+            <tr class="report-grand-total"><td colspan="3"><strong>Total Liabilities & Equity</strong></td><td class="amount text-right"><strong>${fmtCurrency(d.totalLiabilitiesAndEquity)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderTrialBalance(d) {
+    const output = document.getElementById('report-output');
+    output.innerHTML = `
+      <h3 style="text-align:center; margin-bottom:4px;">Trial Balance</h3>
+      <div style="text-align:center; color:var(--text-muted); font-size:13px; margin-bottom:24px;">As of ${fmtDate(d.asOfDate)}</div>
+
+      <table class="data-table">
+        <thead><tr><th>Account #</th><th>Account Name</th><th>Type</th><th class="text-right">Debit</th><th class="text-right">Credit</th></tr></thead>
+        <tbody>
+          ${d.accounts.map(a => `
+            <tr>
+              <td>${escHtml(a.account_number || '')}</td>
+              <td>${escHtml(a.account_name)}</td>
+              <td><span class="tag tag-blue">${a.account_type}</span></td>
+              <td class="amount text-right">${a.debitBalance > 0 ? fmtCurrency(a.debitBalance) : ''}</td>
+              <td class="amount text-right">${a.creditBalance > 0 ? fmtCurrency(a.creditBalance) : ''}</td>
+            </tr>
+          `).join('')}
+          <tr class="report-total-row">
+            <td colspan="3"><strong>Totals</strong></td>
+            <td class="amount text-right"><strong>${fmtCurrency(d.totalDebits)}</strong></td>
+            <td class="amount text-right"><strong>${fmtCurrency(d.totalCredits)}</strong></td>
+          </tr>
+          <tr>
+            <td colspan="3"></td>
+            <td colspan="2" class="text-center ${Math.abs(d.totalDebits - d.totalCredits) < 0.01 ? 'text-success' : 'text-danger'}" style="font-weight:600;">
+              ${Math.abs(d.totalDebits - d.totalCredits) < 0.01 ? '✓ In Balance' : '✗ Out of Balance by ' + fmtCurrency(Math.abs(d.totalDebits - d.totalCredits))}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+  }
+
+  /* ── Bank Import ────────────────────────────────────── */
+  window.handleImportUpload = async function(files) {
+    if (!files || files.length === 0) return;
+    const formData = new FormData();
+    for (let f of files) formData.append('files', f);
+
+    try {
+      const resp = await fetch('/api/import/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Upload failed');
+
+      // Collect all transactions
+      let allTxns = [];
+      (data.files || []).forEach(f => {
+        if (f.success && f.transactions) {
+          allTxns.push(...f.transactions);
+        }
+      });
+
+      if (allTxns.length === 0) {
+        toast('No transactions found in uploaded files', 'error');
+        return;
+      }
+
+      state.importTransactions = allTxns;
+      renderImportResults();
+      toast(`Parsed ${allTxns.length} transactions`, 'success');
+    } catch (err) {
+      toast('Import failed: ' + err.message, 'error');
+    }
+    document.getElementById('import-file-input').value = '';
+  };
+
+  function renderImportResults() {
+    const container = document.getElementById('import-results');
+    container.style.display = 'block';
+
+    // Populate bank account dropdown
+    const bankSelect = document.getElementById('import-bank-account');
+    const bankAccounts = state.accountsList.filter(a => a.account_type === 'ASSET' &&
+      (/cash|bank|check|operat/i.test(a.account_name) || /cash|bank/i.test(a.category || '')));
+    bankSelect.innerHTML = '<option value="">-- Select Bank Account --</option>' +
+      bankAccounts.map(a => `<option value="${a.id}">${escHtml(a.account_number ? a.account_number + ' - ' : '')}${escHtml(a.account_name)}</option>`).join('');
+
+    const tbody = document.getElementById('import-tbody');
+    tbody.innerHTML = state.importTransactions.map((t, i) => `
+      <tr>
+        <td><input type="checkbox" class="import-check" data-idx="${i}" checked></td>
+        <td>${escHtml(t.date || '')}</td>
+        <td>${escHtml(t.description || '')}</td>
+        <td><span class="tag ${t.type === 'deposit' ? 'tag-green' : 'tag-yellow'}">${escHtml(t.type || '')}</span></td>
+        <td class="amount text-right ${t.amount >= 0 ? '' : 'text-danger'}">${fmtCurrency(Math.abs(t.amount || 0))}</td>
+      </tr>
+    `).join('');
+  }
+
+  window.toggleAllImportRows = function(checked) {
+    document.querySelectorAll('.import-check').forEach(cb => cb.checked = checked);
+  };
+
+  window.importToLedger = async function() {
+    const bankAccountId = document.getElementById('import-bank-account').value;
+    if (!bankAccountId) { toast('Please select a bank account', 'error'); return; }
+
+    const selectedTxns = [];
+    document.querySelectorAll('.import-check:checked').forEach(cb => {
+      const idx = parseInt(cb.dataset.idx);
+      selectedTxns.push(state.importTransactions[idx]);
+    });
+
+    if (selectedTxns.length === 0) { toast('No transactions selected', 'error'); return; }
+
+    try {
+      const data = await api('/api/import/to-ledger', {
+        method: 'POST',
+        body: { transactions: selectedTxns, bankAccountId: parseInt(bankAccountId) }
+      });
+
+      toast(`Imported ${data.data.created} entries (${data.data.skipped} skipped)`, 'success');
+      state.importTransactions = [];
+      document.getElementById('import-results').style.display = 'none';
+      loadImportHistory();
+    } catch (err) {
+      toast('Import to ledger failed: ' + err.message, 'error');
+    }
+  };
+
+  async function loadImportHistory() {
+    try {
+      const data = await api('/api/import/history');
+      const tbody = document.getElementById('import-history-tbody');
+      const history = data.data || [];
+      if (history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:20px;">No import history</td></tr>';
+        return;
+      }
+      tbody.innerHTML = history.map(h => `
+        <tr>
+          <td>${fmtDate(h.import_date || h.created_at)}</td>
+          <td>${escHtml(h.file_name || '')}</td>
+          <td>${escHtml(h.bank || '')}</td>
+          <td>${h.transaction_count}</td>
+          <td><span class="tag ${h.status === 'imported' ? 'tag-green' : 'tag-yellow'}">${escHtml(h.status)}</span></td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      console.error('Failed to load import history:', err);
+    }
+  }
+
+  /* ── Drag & Drop for Import ─────────────────────────── */
+  const dropzone = document.getElementById('import-dropzone');
+  if (dropzone) {
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+      dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+    });
+    dropzone.addEventListener('drop', e => {
+      if (e.dataTransfer.files.length > 0) handleImportUpload(e.dataTransfer.files);
+    });
+  }
+
+  /* ── Modal Helpers ──────────────────────────────────── */
+  function openModal(id) {
+    document.getElementById(id).classList.add('active');
+  }
+  window.closeModal = function(id) {
+    document.getElementById(id).classList.remove('active');
+  };
+
+  // Close modals on backdrop click
+  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+    backdrop.addEventListener('click', e => {
+      if (e.target === backdrop) backdrop.classList.remove('active');
+    });
+  });
+
+  // Enter key on filters
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const id = e.target.id;
+    if (['je-filter-from', 'je-filter-to', 'je-filter-search'].includes(id)) loadJournalEntries();
+    if (['search-query', 'search-date-from', 'search-date-to'].includes(id)) runSearch(true);
+    if (['report-date-from', 'report-date-to'].includes(id)) generateReport();
+    if (id === 'login-username') document.getElementById('login-password').focus();
+    if (id === 'login-password') doLogin();
+  });
+
+  /* ── PWA Service Worker ─────────────────────────────── */
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+
+  /* ── Init ───────────────────────────────────────────── */
+  checkAuth();
+
+})();
+</script>
+</body>
+</html>
