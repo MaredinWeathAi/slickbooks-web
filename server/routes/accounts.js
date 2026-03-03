@@ -126,4 +126,103 @@ router.get('/accounts-by-type', requireAuth, async (req, res) => {
   }
 });
 
+// POST merge accounts: reassign all line_items from source accounts into target, deactivate sources
+router.post('/accounts/merge', requireAuth, async (req, res) => {
+  try {
+    const { sourceAccountNames, targetAccountName, targetAccountNumber } = req.body;
+    if (!sourceAccountNames || !targetAccountName) {
+      return res.status(400).json({ success: false, error: 'sourceAccountNames and targetAccountName required' });
+    }
+
+    // Find source accounts
+    const placeholders = sourceAccountNames.map((_, i) => `$${i + 1}`).join(',');
+    const sources = await db.query(
+      `SELECT id, account_name, account_type, normal_balance FROM chart_of_accounts WHERE account_name IN (${placeholders})`,
+      sourceAccountNames
+    );
+
+    if (sources.length === 0) {
+      return res.status(404).json({ success: false, error: 'No matching source accounts found' });
+    }
+
+    // Check if target already exists
+    let target = await db.queryOne(
+      'SELECT id, account_name FROM chart_of_accounts WHERE account_name = $1',
+      [targetAccountName]
+    );
+
+    const sourceIds = sources.map(s => s.id);
+    const sourceType = sources[0].account_type;
+    const sourceNormalBalance = sources[0].normal_balance;
+
+    if (target && sourceIds.includes(target.id)) {
+      // Target is one of the sources — just rename it and merge others into it
+      await db.query(
+        `UPDATE chart_of_accounts SET account_name = $1, account_number = COALESCE($2, account_number), updated_at = NOW() WHERE id = $3`,
+        [targetAccountName, targetAccountNumber || null, target.id]
+      );
+      // Move line items from OTHER source accounts to this one
+      const otherSourceIds = sourceIds.filter(id => id !== target.id);
+      if (otherSourceIds.length > 0) {
+        const idPlaceholders = otherSourceIds.map((_, i) => `$${i + 1}`).join(',');
+        const movedItems = await db.query(
+          `UPDATE line_items SET account_id = $${otherSourceIds.length + 1} WHERE account_id IN (${idPlaceholders}) RETURNING id`,
+          [...otherSourceIds, target.id]
+        );
+        // Deactivate the merged-away source accounts
+        await db.query(
+          `UPDATE chart_of_accounts SET is_active = false, updated_at = NOW() WHERE id IN (${idPlaceholders})`,
+          otherSourceIds
+        );
+      }
+    } else if (target) {
+      // Target exists but is a different account — merge sources into it
+      const idPlaceholders = sourceIds.map((_, i) => `$${i + 1}`).join(',');
+      await db.query(
+        `UPDATE line_items SET account_id = $${sourceIds.length + 1} WHERE account_id IN (${idPlaceholders}) RETURNING id`,
+        [...sourceIds, target.id]
+      );
+      await db.query(
+        `UPDATE chart_of_accounts SET is_active = false, updated_at = NOW() WHERE id IN (${idPlaceholders})`,
+        sourceIds
+      );
+    } else {
+      // Target doesn't exist — rename the first source, merge the rest into it
+      target = sources[0];
+      await db.query(
+        `UPDATE chart_of_accounts SET account_name = $1, account_number = COALESCE($2, account_number), updated_at = NOW() WHERE id = $3`,
+        [targetAccountName, targetAccountNumber || null, target.id]
+      );
+      const otherSourceIds = sourceIds.filter(id => id !== target.id);
+      if (otherSourceIds.length > 0) {
+        const idPlaceholders = otherSourceIds.map((_, i) => `$${i + 1}`).join(',');
+        await db.query(
+          `UPDATE line_items SET account_id = $${otherSourceIds.length + 1} WHERE account_id IN (${idPlaceholders})`,
+          [...otherSourceIds, target.id]
+        );
+        await db.query(
+          `UPDATE chart_of_accounts SET is_active = false, updated_at = NOW() WHERE id IN (${idPlaceholders})`,
+          otherSourceIds
+        );
+      }
+    }
+
+    // Count line items now on target
+    const count = await db.queryOne('SELECT COUNT(*) as count FROM line_items WHERE account_id = $1', [target.id]);
+
+    res.json({
+      success: true,
+      data: {
+        targetAccountId: target.id,
+        targetAccountName,
+        mergedFrom: sources.map(s => s.account_name),
+        totalLineItems: parseInt(count.count)
+      }
+    });
+  } catch (err) {
+    console.error('[Accounts] Merge error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
