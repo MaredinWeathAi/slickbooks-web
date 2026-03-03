@@ -176,6 +176,109 @@ router.get('/reports/trial-balance', requireAuth, async (req, res) => {
   }
 });
 
+// Transaction Detail by Account
+router.get('/reports/transaction-detail', requireAuth, async (req, res) => {
+  try {
+    const { startDate, endDate, accountId } = req.query;
+
+    let accountFilter = '';
+    const params = [];
+
+    if (accountId) {
+      params.push(parseInt(accountId));
+      accountFilter = `AND coa.id = $${params.length}`;
+    }
+
+    // Get accounts that have transactions in the period
+    let jeConditions = 'je.is_posted = true AND je.is_void = false';
+    if (startDate) { params.push(startDate); jeConditions += ` AND je.entry_date >= $${params.length}`; }
+    if (endDate) { params.push(endDate); jeConditions += ` AND je.entry_date <= $${params.length}`; }
+
+    // Get all transactions grouped by account
+    const sql = `
+      SELECT
+        coa.id as account_id, coa.account_number, coa.account_name, coa.account_type, coa.normal_balance,
+        je.id as je_id, je.entry_number, je.entry_date, je.entry_type, je.description as je_description, je.memo as je_memo,
+        li.debit_amount, li.credit_amount, li.description as li_description
+      FROM line_items li
+      INNER JOIN journal_entries je ON li.journal_entry_id = je.id AND ${jeConditions}
+      INNER JOIN chart_of_accounts coa ON li.account_id = coa.id
+      WHERE coa.is_active = true ${accountFilter}
+      ORDER BY coa.account_number, coa.account_name, je.entry_date, je.id
+    `;
+
+    const rows = await db.query(sql, params);
+
+    // Group by account and build transaction detail
+    const accountMap = {};
+    for (const row of rows) {
+      const key = row.account_id;
+      if (!accountMap[key]) {
+        accountMap[key] = {
+          account_id: row.account_id,
+          account_number: row.account_number,
+          account_name: row.account_name,
+          account_type: row.account_type,
+          normal_balance: row.normal_balance,
+          transactions: [],
+          net_amount: 0,
+          ending_balance: 0
+        };
+      }
+
+      const debit = parseFloat(row.debit_amount) || 0;
+      const credit = parseFloat(row.credit_amount) || 0;
+      // Amount sign depends on normal balance: DEBIT accounts show debit-credit, CREDIT accounts show credit-debit
+      const amount = row.normal_balance === 'DEBIT' ? (debit - credit) : (credit - debit);
+
+      // Find split account (other accounts in same journal entry)
+      let splitAccount = '';
+      const splitRows = rows.filter(r => r.je_id === row.je_id && r.account_id !== row.account_id);
+      if (splitRows.length === 1) {
+        splitAccount = splitRows[0].account_name;
+      } else if (splitRows.length > 1) {
+        splitAccount = '-Split-';
+      }
+
+      accountMap[key].transactions.push({
+        date: row.entry_date,
+        transaction_type: row.entry_type,
+        entry_number: row.entry_number || '',
+        name: row.je_description || '',
+        memo: row.li_description || row.je_memo || '',
+        split_account: splitAccount,
+        amount: Math.round(amount * 100) / 100,
+        debit, credit,
+        running_balance: 0 // will be calculated below
+      });
+      accountMap[key].net_amount += amount;
+    }
+
+    // Calculate running balances
+    const accounts = Object.values(accountMap);
+    for (const acct of accounts) {
+      let balance = 0;
+      for (const txn of acct.transactions) {
+        balance += txn.amount;
+        txn.running_balance = Math.round(balance * 100) / 100;
+      }
+      acct.net_amount = Math.round(acct.net_amount * 100) / 100;
+      acct.ending_balance = Math.round(balance * 100) / 100;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        reportType: 'transaction_detail',
+        startDate, endDate,
+        accounts
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Dashboard Analytics (monthly/quarterly data for charts)
 router.get('/reports/analytics', requireAuth, async (req, res) => {
   try {

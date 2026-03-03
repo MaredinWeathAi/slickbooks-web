@@ -513,7 +513,7 @@
         <div class="nav-section-title">Reports</div>
         <div class="nav-link" onclick="switchView('reports')" data-view="reports">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-          Financial Reports
+          Reports
         </div>
       </div>
 
@@ -655,10 +655,18 @@
         </div>
 
         <div class="filter-bar">
+          <label>Quick Range:</label>
+          <select id="je-filter-quick-range" onchange="applyQuickRange('je-filter-quick-range','je-filter-from','je-filter-to')" style="min-width:140px;">
+            <option value="">Custom</option>
+            <option value="last_month">Last Month</option>
+            <option value="last_quarter">Last Quarter</option>
+            <option value="ytd">Year to Date</option>
+            <option value="last_year">Last Year</option>
+          </select>
           <label>From:</label>
-          <input type="date" id="je-filter-from">
+          <input type="date" id="je-filter-from" onchange="document.getElementById('je-filter-quick-range').value=''">
           <label>To:</label>
-          <input type="date" id="je-filter-to">
+          <input type="date" id="je-filter-to" onchange="document.getElementById('je-filter-quick-range').value=''">
           <label>Status:</label>
           <select id="je-filter-status" onchange="loadJournalEntries()">
             <option value="">All</option>
@@ -696,10 +704,18 @@
 
         <div class="filter-bar">
           <input type="text" id="search-query" placeholder="Search description, memo, account name..." style="flex: 2; min-width: 200px;">
+          <label>Quick Range:</label>
+          <select id="search-date-quick-range" onchange="applyQuickRange('search-date-quick-range','search-date-from','search-date-to')" style="min-width:140px;">
+            <option value="">Custom</option>
+            <option value="last_month">Last Month</option>
+            <option value="last_quarter">Last Quarter</option>
+            <option value="ytd">Year to Date</option>
+            <option value="last_year">Last Year</option>
+          </select>
           <label>From:</label>
-          <input type="date" id="search-date-from">
+          <input type="date" id="search-date-from" onchange="document.getElementById('search-date-quick-range').value=''">
           <label>To:</label>
-          <input type="date" id="search-date-to">
+          <input type="date" id="search-date-to" onchange="document.getElementById('search-date-quick-range').value=''">
           <button class="btn btn-primary" onclick="runSearch(true)">Search</button>
         </div>
 
@@ -720,7 +736,7 @@
       <div class="view" id="reports-view">
         <div class="page-header">
           <div>
-            <div class="page-title">Financial Reports</div>
+            <div class="page-title">Reports</div>
             <div class="page-subtitle">Generate standard financial reports</div>
           </div>
         </div>
@@ -729,13 +745,24 @@
           <button class="btn btn-primary" id="report-btn-pnl" onclick="selectReport('pnl')">Profit & Loss</button>
           <button class="btn" id="report-btn-bs" onclick="selectReport('bs')">Balance Sheet</button>
           <button class="btn" id="report-btn-tb" onclick="selectReport('tb')">Trial Balance</button>
+          <button class="btn" id="report-btn-txn" onclick="selectReport('txn')">Transaction Detail</button>
         </div>
 
         <div class="filter-bar" id="report-filters">
+          <label>Quick Range:</label>
+          <select id="report-quick-range" onchange="applyQuickRange('report-quick-range','report-date-from','report-date-to')" style="min-width:140px;">
+            <option value="">Custom</option>
+            <option value="last_month">Last Month</option>
+            <option value="last_quarter">Last Quarter</option>
+            <option value="ytd">Year to Date</option>
+            <option value="last_year">Last Year</option>
+          </select>
           <label id="report-date-label-from">From:</label>
-          <input type="date" id="report-date-from">
+          <input type="date" id="report-date-from" onchange="document.getElementById('report-quick-range').value=''">
           <label id="report-date-label-to">To:</label>
-          <input type="date" id="report-date-to">
+          <input type="date" id="report-date-to" onchange="document.getElementById('report-quick-range').value=''">
+          <label id="report-account-label" style="display:none;">Account:</label>
+          <select id="report-account-select" style="display:none; min-width:200px;"></select>
           <button class="btn btn-primary btn-sm" onclick="generateReport()">Generate</button>
         </div>
 
@@ -2230,8 +2257,10 @@
     const toLabel = document.getElementById('report-date-label-to');
     const fromInput = document.getElementById('report-date-from');
     const toInput = document.getElementById('report-date-to');
+    const acctLabel = document.getElementById('report-account-label');
+    const acctSelect = document.getElementById('report-account-select');
 
-    if (type === 'pnl') {
+    if (type === 'pnl' || type === 'txn') {
       fromLabel.textContent = 'From:'; toLabel.textContent = 'To:';
       fromLabel.style.display = ''; toLabel.style.display = '';
       fromInput.style.display = ''; toInput.style.display = '';
@@ -2239,6 +2268,20 @@
       fromLabel.textContent = 'As of:'; toLabel.style.display = 'none';
       fromLabel.style.display = ''; fromInput.style.display = '';
       toInput.style.display = 'none';
+    }
+
+    // Show/hide account selector for Transaction Detail
+    if (type === 'txn') {
+      acctLabel.style.display = '';
+      acctSelect.style.display = '';
+      // Populate account dropdown
+      const accounts = state.accountsList || [];
+      acctSelect.innerHTML = '<option value="">All Accounts</option>' +
+        accounts.sort((a, b) => (a.account_number || '').localeCompare(b.account_number || ''))
+          .map(a => `<option value="${a.id}">${escHtml(a.account_number ? a.account_number + ' - ' : '')}${escHtml(a.account_name)}</option>`).join('');
+    } else {
+      acctLabel.style.display = 'none';
+      acctSelect.style.display = 'none';
     }
   };
 
@@ -2269,6 +2312,16 @@
         if (asOf) url += `asOfDate=${asOf}&`;
         data = await api(url);
         renderTrialBalance(data.data);
+      } else if (type === 'txn') {
+        const from = document.getElementById('report-date-from').value;
+        const to = document.getElementById('report-date-to').value;
+        const accountId = document.getElementById('report-account-select').value;
+        let url = '/api/reports/transaction-detail?';
+        if (from) url += `startDate=${from}&`;
+        if (to) url += `endDate=${to}&`;
+        if (accountId) url += `accountId=${accountId}&`;
+        data = await api(url);
+        renderTransactionDetail(data.data);
       }
     } catch (err) {
       output.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Error: ${escHtml(err.message)}</div></div>`;
@@ -2408,6 +2461,112 @@
       </table>
     `;
   }
+
+  function renderTransactionDetail(d) {
+    const output = document.getElementById('report-output');
+    const period = d.startDate && d.endDate ? `${fmtDate(d.startDate)} — ${fmtDate(d.endDate)}` : 'All Time';
+
+    let html = `
+      <h3 style="text-align:center; margin-bottom:4px;">Transaction Detail by Account</h3>
+      <div style="text-align:center; color:var(--text-muted); font-size:13px; margin-bottom:4px;">Maredin Wealth Advisors</div>
+      <div style="text-align:center; color:var(--text-muted); font-size:13px; margin-bottom:24px;">${period}</div>
+    `;
+
+    if (!d.accounts || d.accounts.length === 0) {
+      html += '<div class="empty-state"><div class="empty-state-icon">📄</div><div class="empty-state-text">No transactions found for this period</div></div>';
+      output.innerHTML = html;
+      return;
+    }
+
+    for (const acct of d.accounts) {
+      html += `
+        <div class="report-section" style="margin-bottom:24px;">
+          <div class="report-section-title" style="font-size:14px; font-weight:700; margin-bottom:8px; padding-bottom:6px; border-bottom:2px solid var(--border);">
+            ${escHtml(acct.account_number ? acct.account_number + ' - ' : '')}${escHtml(acct.account_name)}
+            <span style="font-weight:400; color:var(--text-muted); font-size:12px; margin-left:8px;">${escHtml(acct.account_type)}</span>
+          </div>
+          <table class="data-table" style="font-size:12px;">
+            <thead>
+              <tr>
+                <th style="width:90px;">Date</th>
+                <th style="width:80px;">Type</th>
+                <th style="width:60px;">Num</th>
+                <th>Name</th>
+                <th>Memo/Description</th>
+                <th>Split Account</th>
+                <th class="text-right" style="width:100px;">Amount</th>
+                <th class="text-right" style="width:110px;">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      for (const txn of acct.transactions) {
+        const amtClass = txn.amount < 0 ? 'text-danger' : '';
+        html += `
+              <tr>
+                <td>${fmtDate(txn.date)}</td>
+                <td>${escHtml(txn.transaction_type || '')}</td>
+                <td>${escHtml(txn.entry_number || '')}</td>
+                <td>${escHtml(txn.name || '')}</td>
+                <td>${escHtml(txn.memo || '')}</td>
+                <td class="text-muted">${escHtml(txn.split_account || '')}</td>
+                <td class="amount text-right ${amtClass}">${fmtCurrency(txn.amount)}</td>
+                <td class="amount text-right">${fmtCurrency(txn.running_balance)}</td>
+              </tr>
+        `;
+      }
+      html += `
+              <tr class="report-total-row">
+                <td colspan="6"><strong>Total for ${escHtml(acct.account_name)}</strong></td>
+                <td class="amount text-right"><strong>${fmtCurrency(acct.net_amount)}</strong></td>
+                <td class="amount text-right"><strong>${fmtCurrency(acct.ending_balance)}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    output.innerHTML = html;
+  }
+
+  /* ── Quick Date Range Helper ─────────────────────────── */
+  window.applyQuickRange = function(selectId, fromId, toId) {
+    const select = document.getElementById(selectId);
+    const val = select.value;
+    if (!val) return;
+
+    const today = new Date();
+    let from, to;
+
+    if (val === 'last_month') {
+      const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      from = d.toISOString().split('T')[0];
+      to = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+    } else if (val === 'last_quarter') {
+      const currentQ = Math.floor(today.getMonth() / 3);
+      const lastQStart = currentQ === 0 ? new Date(today.getFullYear() - 1, 9, 1) : new Date(today.getFullYear(), (currentQ - 1) * 3, 1);
+      const lastQEnd = currentQ === 0 ? new Date(today.getFullYear() - 1, 12, 0) : new Date(today.getFullYear(), currentQ * 3, 0);
+      from = lastQStart.toISOString().split('T')[0];
+      to = lastQEnd.toISOString().split('T')[0];
+    } else if (val === 'ytd') {
+      from = today.getFullYear() + '-01-01';
+      to = today.toISOString().split('T')[0];
+    } else if (val === 'last_year') {
+      from = (today.getFullYear() - 1) + '-01-01';
+      to = (today.getFullYear() - 1) + '-12-31';
+    }
+
+    const fromInput = document.getElementById(fromId);
+    const toInput = document.getElementById(toId);
+    if (fromInput) fromInput.value = from || '';
+    if (toInput) toInput.value = to || '';
+
+    // For balance sheet / trial balance, set from to the "as of" date (end of range)
+    if (selectId === 'report-quick-range' && (state.selectedReport === 'bs' || state.selectedReport === 'tb')) {
+      if (fromInput) fromInput.value = to || '';
+    }
+  };
 
   /* ── Bank Import ────────────────────────────────────── */
   window.handleImportUpload = async function(files) {
