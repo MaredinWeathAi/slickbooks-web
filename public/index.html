@@ -1073,6 +1073,58 @@
           </div>
         </div>
 
+        <!-- ── Uncategorized Items ── -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Uncategorized Items</div>
+            <div class="btn-group">
+              <button class="btn btn-sm" onclick="loadUncategorized()" title="Refresh list">Refresh</button>
+              <button class="btn btn-sm btn-primary" onclick="autoApplyRules()" title="Auto-apply learned rules">Auto-Apply Rules</button>
+              <button class="btn btn-sm" onclick="showCategoryRules()" title="View learned rules">View Rules (<span id="recon-rule-count">0</span>)</button>
+            </div>
+          </div>
+          <div style="padding:12px 16px;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);font-size:13px;color:var(--text-muted);">
+            Categorize items below by selecting the correct account. Check <strong>"Learn"</strong> to teach the system — it will auto-apply your choice to all similar future transactions.
+          </div>
+          <div id="uncat-loading" style="display:none;padding:20px;text-align:center;color:var(--text-muted);">Loading uncategorized items...</div>
+          <div id="uncat-empty" style="display:none;padding:20px;text-align:center;color:var(--success);font-weight:500;">All items are categorized — nothing to review!</div>
+          <div class="table-wrapper" id="uncat-table-wrapper" style="display:none;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Current Account</th>
+                  <th class="text-right">Amount</th>
+                  <th style="min-width:220px;">Assign Account</th>
+                  <th style="width:50px;" title="Check to learn this mapping for future auto-apply">Learn</th>
+                  <th style="width:80px;"></th>
+                </tr>
+              </thead>
+              <tbody id="uncat-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── Learned Rules Modal ── -->
+        <div id="rules-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;">
+          <div style="background:var(--bg-primary);border-radius:12px;width:700px;max-height:80vh;overflow:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+              <h3 style="margin:0;color:var(--text-primary);">Learned Category Rules</h3>
+              <button class="btn btn-sm" onclick="document.getElementById('rules-modal').style.display='none'">Close</button>
+            </div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+              These rules were learned from your categorization choices. When a transaction description matches a pattern, the system auto-suggests or auto-applies the mapped account.
+            </p>
+            <table class="data-table">
+              <thead>
+                <tr><th>Pattern</th><th>Match Type</th><th>Maps To Account</th><th>Times Used</th><th></th></tr>
+              </thead>
+              <tbody id="rules-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Recent Imports -->
         <div class="card">
           <div class="card-header">
@@ -3537,10 +3589,217 @@
       // Mark reconciliation as run
       await api('/api/reconciliation/run', { method: 'POST' });
 
+      // Also load uncategorized items
+      await loadUncategorized();
+
       toast('Reconciliation complete', 'success');
     } catch (err) {
       console.error('Reconciliation error:', err);
       toast('Reconciliation failed: ' + err.message, 'error');
+    }
+  };
+
+  /* ── Uncategorized Items Functions ─────────────────── */
+
+  // Store accounts list for dropdowns
+  let uncatAccounts = [];
+
+  window.loadUncategorized = async function() {
+    const loading = document.getElementById('uncat-loading');
+    const empty = document.getElementById('uncat-empty');
+    const tableWrapper = document.getElementById('uncat-table-wrapper');
+    const tbody = document.getElementById('uncat-tbody');
+
+    loading.style.display = 'block';
+    empty.style.display = 'none';
+    tableWrapper.style.display = 'none';
+
+    try {
+      const result = await api('/api/reconciliation/uncategorized');
+      const { items, accounts, ruleCount } = result.data;
+
+      uncatAccounts = accounts;
+      document.getElementById('recon-rule-count').textContent = ruleCount;
+
+      loading.style.display = 'none';
+
+      if (!items || items.length === 0) {
+        empty.style.display = 'block';
+        return;
+      }
+
+      tableWrapper.style.display = 'block';
+
+      // Build account options HTML once
+      const acctOptions = accounts.map(a =>
+        `<option value="${a.id}">${escHtml(a.account_name)} (${a.account_type})</option>`
+      ).join('');
+
+      tbody.innerHTML = items.map(item => {
+        const desc = item.line_description || item.je_description || '--';
+        const amt = parseFloat(item.amount || 0);
+        const hasSuggestion = item.suggestedAccount != null;
+        const suggestedId = hasSuggestion ? item.suggestedAccount.accountId : '';
+        const suggestedLabel = hasSuggestion
+          ? `<div style="font-size:11px;color:var(--success);margin-top:2px;">Suggested: ${escHtml(item.suggestedAccount.accountName)} (${Math.round(item.suggestedAccount.confidence * 100)}%)</div>`
+          : '';
+
+        return `
+          <tr id="uncat-row-${item.line_item_id}">
+            <td style="white-space:nowrap;">${fmtDate(item.entry_date)}</td>
+            <td>
+              <div style="font-weight:500;font-size:13px;">${escHtml(desc.substring(0, 80))}</div>
+              <div style="font-size:11px;color:var(--text-muted);">JE #${item.journal_entry_id}${item.source ? ' | ' + escHtml(item.source) : ''}</div>
+            </td>
+            <td><span class="tag tag-yellow">${escHtml(item.account_name)}</span></td>
+            <td class="text-right" style="font-weight:600;color:${amt >= 0 ? 'var(--danger)' : 'var(--success)'};">
+              ${amt >= 0 ? '$' + Math.abs(amt).toFixed(2) : '-$' + Math.abs(amt).toFixed(2)}
+            </td>
+            <td>
+              <select id="uncat-acct-${item.line_item_id}" class="form-select" style="font-size:12px;padding:4px 8px;">
+                <option value="">-- Select account --</option>
+                ${acctOptions}
+              </select>
+              ${suggestedLabel}
+            </td>
+            <td style="text-align:center;">
+              <input type="checkbox" id="uncat-learn-${item.line_item_id}" checked title="Learn this mapping for future auto-apply">
+            </td>
+            <td>
+              <button class="btn btn-sm btn-success" onclick="categorizeItem(${item.line_item_id}, '${escHtml(desc.replace(/'/g, "\\'"))}')">Save</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      // Auto-select suggested accounts
+      for (const item of items) {
+        if (item.suggestedAccount) {
+          const sel = document.getElementById('uncat-acct-' + item.line_item_id);
+          if (sel) sel.value = item.suggestedAccount.accountId;
+        }
+      }
+
+    } catch (err) {
+      loading.style.display = 'none';
+      console.error('Load uncategorized error:', err);
+      toast('Failed to load uncategorized items: ' + err.message, 'error');
+    }
+  };
+
+  window.categorizeItem = async function(lineItemId, description) {
+    const select = document.getElementById('uncat-acct-' + lineItemId);
+    const learnCheckbox = document.getElementById('uncat-learn-' + lineItemId);
+    const newAccountId = select ? select.value : '';
+
+    if (!newAccountId) {
+      toast('Please select an account first', 'error');
+      return;
+    }
+
+    try {
+      // Determine a good match pattern from the description
+      // Use the first meaningful word(s) — vendor name typically
+      let matchPattern = description.trim();
+      // Try to extract the vendor/merchant name (first significant phrase)
+      const words = matchPattern.split(/\s+/);
+      if (words.length > 3) {
+        // Use first 3 words as a "contains" pattern for better matching
+        matchPattern = words.slice(0, 3).join(' ');
+      }
+
+      await api('/api/reconciliation/categorize', {
+        method: 'POST',
+        body: JSON.stringify({
+          lineItemId,
+          newAccountId: parseInt(newAccountId),
+          learnRule: learnCheckbox ? learnCheckbox.checked : false,
+          matchPattern,
+          matchType: 'contains'
+        })
+      });
+
+      // Animate row removal
+      const row = document.getElementById('uncat-row-' + lineItemId);
+      if (row) {
+        row.style.transition = 'opacity 0.3s, background 0.3s';
+        row.style.background = 'var(--success-bg, #c6efce)';
+        row.style.opacity = '0.5';
+        setTimeout(() => row.remove(), 500);
+      }
+
+      toast('Item categorized' + (learnCheckbox && learnCheckbox.checked ? ' — rule learned!' : ''), 'success');
+
+      // Update rule count
+      const rulesResult = await api('/api/reconciliation/rules');
+      document.getElementById('recon-rule-count').textContent = rulesResult.data.rules.length;
+
+    } catch (err) {
+      console.error('Categorize error:', err);
+      toast('Failed to categorize: ' + err.message, 'error');
+    }
+  };
+
+  window.autoApplyRules = async function() {
+    if (!confirm('Auto-apply all learned rules to uncategorized items? This will re-categorize matching transactions automatically.')) return;
+
+    try {
+      toast('Applying learned rules...', 'info');
+      const result = await api('/api/reconciliation/auto-categorize', { method: 'POST' });
+      const { applied, skipped, totalProcessed, details } = result.data;
+
+      if (applied > 0) {
+        toast(`Auto-categorized ${applied} of ${totalProcessed} items. ${skipped} had no matching rules.`, 'success');
+      } else {
+        toast(`No matching rules found for ${totalProcessed} uncategorized items. Categorize items manually to teach the system.`, 'info');
+      }
+
+      // Reload the list
+      await loadUncategorized();
+    } catch (err) {
+      console.error('Auto-apply error:', err);
+      toast('Auto-apply failed: ' + err.message, 'error');
+    }
+  };
+
+  window.showCategoryRules = async function() {
+    const modal = document.getElementById('rules-modal');
+    modal.style.display = 'flex';
+
+    try {
+      const result = await api('/api/reconciliation/rules');
+      const rules = result.data.rules || [];
+
+      const tbody = document.getElementById('rules-tbody');
+      if (rules.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:20px;">No rules learned yet. Categorize items with "Learn" checked to create rules.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = rules.map(r => `
+        <tr>
+          <td><code style="background:var(--bg-secondary);padding:2px 6px;border-radius:3px;font-size:12px;">${escHtml(r.match_pattern)}</code></td>
+          <td><span class="tag">${escHtml(r.match_type)}</span></td>
+          <td>${escHtml(r.account_name)} <span style="font-size:11px;color:var(--text-muted);">(${r.account_type})</span></td>
+          <td style="text-align:center;"><strong>${r.times_applied}</strong></td>
+          <td><button class="btn btn-sm" style="color:var(--danger);" onclick="deleteRule(${r.id})">Remove</button></td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      console.error('Load rules error:', err);
+    }
+  };
+
+  window.deleteRule = async function(ruleId) {
+    if (!confirm('Delete this categorization rule?')) return;
+    try {
+      await api('/api/reconciliation/rules/' + ruleId, { method: 'DELETE' });
+      toast('Rule deleted', 'success');
+      showCategoryRules(); // Refresh
+      const rulesResult = await api('/api/reconciliation/rules');
+      document.getElementById('recon-rule-count').textContent = rulesResult.data.rules.length;
+    } catch (err) {
+      toast('Failed to delete rule: ' + err.message, 'error');
     }
   };
 
