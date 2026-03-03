@@ -96,31 +96,6 @@ app.use('/api', recurringRoutes);
 app.use('/api', ccImportRoutes);
 app.use('/api', reconciliationRoutes);
 
-// Temporary diagnostic endpoint (will be removed after analysis)
-app.get('/api/diag/revenue-check', async (req, res) => {
-  const { Pool: DiagPool } = require('pg');
-  const diagPool = new DiagPool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 1, connectionTimeoutMillis: 8000, idleTimeoutMillis: 5000 });
-  try {
-    const step = req.query.step || '1';
-    let result;
-    if (step === '1') {
-      result = await diagPool.query(`SELECT id, account_name, is_active FROM chart_of_accounts WHERE account_type = 'REVENUE' ORDER BY id`);
-    } else if (step === '2') {
-      result = await diagPool.query(`SELECT je.id, je.entry_date::text, je.description, li.debit_amount, li.credit_amount, coa.account_name FROM journal_entries je JOIN line_items li ON li.journal_entry_id = je.id JOIN chart_of_accounts coa ON coa.id = li.account_id WHERE coa.account_type = 'REVENUE' AND je.entry_date >= '2025-01-01' AND je.entry_date <= '2025-04-30' AND je.is_void = false ORDER BY je.entry_date`);
-    } else if (step === '3') {
-      result = await diagPool.query(`SELECT je.id, je.entry_date::text, je.description, li.debit_amount, coa.account_name FROM journal_entries je JOIN line_items li ON li.journal_entry_id = je.id JOIN chart_of_accounts coa ON coa.id = li.account_id WHERE coa.account_type = 'ASSET' AND li.debit_amount > 0 AND je.entry_date >= '2025-01-01' AND je.entry_date <= '2025-04-30' AND je.is_void = false ORDER BY je.entry_date LIMIT 100`);
-    } else {
-      await diagPool.end();
-      return res.json({ error: 'use ?step=1, 2, or 3' });
-    }
-    await diagPool.end();
-    res.json(result.rows);
-  } catch (err) {
-    try { await diagPool.end(); } catch(e) {}
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // SPA fallback — serve index.html for all non-API routes
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {
@@ -147,37 +122,56 @@ initializeDatabase().then(async () => {
   // ─── One-time migrations ───
   try {
     const db = require('./db');
-
-    // Migration: Merge "Client Fee Account" + "Professional Services" → "Management Fees"
-    const migrationKey = 'merge_revenue_to_management_fees';
-    // Use a simple flag table to track migrations
     await db.query(`CREATE TABLE IF NOT EXISTS migrations (key VARCHAR(200) PRIMARY KEY, ran_at TIMESTAMPTZ DEFAULT NOW())`);
+
+    // Migration v1: Original merge (may have already run)
+    const migrationKey = 'merge_revenue_to_management_fees';
     const already = await db.queryOne('SELECT key FROM migrations WHERE key = $1', [migrationKey]);
     if (!already) {
-      // Find source accounts
       const sources = await db.query(
         `SELECT id, account_name FROM chart_of_accounts WHERE account_name IN ('Client Fee Account', 'Professional Services') AND is_active = true`
       );
       if (sources.length > 0) {
         const sourceIds = sources.map(s => s.id);
-        // Rename the first source to "Management Fees"
         const targetId = sourceIds[0];
         await db.query(`UPDATE chart_of_accounts SET account_name = 'Management Fees', updated_at = NOW() WHERE id = $1`, [targetId]);
-
-        // Move line_items from other sources to target
         const otherIds = sourceIds.filter(id => id !== targetId);
-        if (otherIds.length > 0) {
-          for (const otherId of otherIds) {
-            await db.query(`UPDATE line_items SET account_id = $1 WHERE account_id = $2`, [targetId, otherId]);
-            await db.query(`UPDATE chart_of_accounts SET is_active = false, updated_at = NOW() WHERE id = $1`, [otherId]);
-          }
+        for (const otherId of otherIds) {
+          await db.query(`UPDATE line_items SET account_id = $1 WHERE account_id = $2`, [targetId, otherId]);
+          await db.query(`UPDATE chart_of_accounts SET is_active = false, updated_at = NOW() WHERE id = $1`, [otherId]);
         }
-        console.log(`[Migration] Merged ${sources.map(s => s.account_name).join(' + ')} → Management Fees (${sourceIds.length} accounts, target id=${targetId})`);
-      } else {
-        console.log('[Migration] No "Client Fee Account" or "Professional Services" found to merge');
+        console.log(`[Migration] Merged ${sources.map(s => s.account_name).join(' + ')} → Management Fees`);
       }
       await db.query('INSERT INTO migrations (key) VALUES ($1) ON CONFLICT DO NOTHING', [migrationKey]);
     }
+
+    // Migration v2: Force rename if v1 didn't stick (accounts may still be named "Client Fee Account")
+    const migV2Key = 'force_rename_management_fees_v2';
+    const alreadyV2 = await db.queryOne('SELECT key FROM migrations WHERE key = $1', [migV2Key]);
+    if (!alreadyV2) {
+      // Rename "Client Fee Account" (ID 1) to "Management Fees"
+      await db.query(`UPDATE chart_of_accounts SET account_name = 'Management Fees', updated_at = NOW() WHERE id = 1 AND account_name = 'Client Fee Account'`);
+      // Move all line_items from "Professional Services" (ID 12) to "Management Fees" (ID 1) and deactivate
+      const profSvc = await db.queryOne(`SELECT id FROM chart_of_accounts WHERE id = 12 AND account_name = 'Professional Services' AND is_active = true`);
+      if (profSvc) {
+        await db.query(`UPDATE line_items SET account_id = 1 WHERE account_id = 12`);
+        await db.query(`UPDATE chart_of_accounts SET is_active = false, updated_at = NOW() WHERE id = 12`);
+        console.log('[Migration v2] Moved Professional Services line_items to Management Fees, deactivated ID 12');
+      }
+      const cfa = await db.queryOne(`SELECT id, account_name FROM chart_of_accounts WHERE id = 1`);
+      console.log(`[Migration v2] Account ID 1 is now: ${cfa ? cfa.account_name : 'not found'}`);
+      await db.query('INSERT INTO migrations (key) VALUES ($1) ON CONFLICT DO NOTHING', [migV2Key]);
+    }
+
+    // Cleanup: Remove temporary diagnostic user
+    const cleanupKey = 'cleanup_diag_user';
+    const alreadyCleanup = await db.queryOne('SELECT key FROM migrations WHERE key = $1', [cleanupKey]);
+    if (!alreadyCleanup) {
+      await db.query(`DELETE FROM users WHERE username = 'diagtemp'`);
+      console.log('[Migration] Removed temporary diagnostic user');
+      await db.query('INSERT INTO migrations (key) VALUES ($1) ON CONFLICT DO NOTHING', [cleanupKey]);
+    }
+
   } catch (migErr) {
     console.error('[Migration] Error:', migErr.message);
   }
