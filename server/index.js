@@ -96,6 +96,65 @@ app.use('/api', recurringRoutes);
 app.use('/api', ccImportRoutes);
 app.use('/api', reconciliationRoutes);
 
+// Temporary diagnostic endpoint (will be removed after analysis)
+app.get('/api/diag/revenue-check', async (req, res) => {
+  try {
+    const db = require('./db');
+
+    // Get all revenue accounts
+    const revenueAccounts = await db.query(`
+      SELECT id, account_name, is_active
+      FROM chart_of_accounts
+      WHERE account_type = 'REVENUE' ORDER BY id
+    `);
+
+    // Get revenue journal entries for Jan, Feb, Mar, Apr 2025
+    const revenueEntries = await db.query(`
+      SELECT je.id, je.entry_date, je.description, je.memo,
+             li.account_id, coa.account_name, li.debit_amount, li.credit_amount
+      FROM journal_entries je
+      JOIN line_items li ON li.journal_entry_id = je.id
+      JOIN chart_of_accounts coa ON coa.id = li.account_id
+      WHERE coa.account_type = 'REVENUE'
+        AND je.entry_date >= '2025-01-01' AND je.entry_date <= '2025-04-30'
+        AND je.is_void = false
+      ORDER BY je.entry_date, je.id
+    `);
+
+    // Get all cash/bank deposit entries (debits to asset accounts)
+    const deposits = await db.query(`
+      SELECT je.id, je.entry_date, je.description, je.memo,
+             li.account_id, coa.account_name, li.debit_amount, li.credit_amount
+      FROM journal_entries je
+      JOIN line_items li ON li.journal_entry_id = je.id
+      JOIN chart_of_accounts coa ON coa.id = li.account_id
+      WHERE (coa.account_name ILIKE '%cash%' OR coa.account_name ILIKE '%bank%' OR coa.account_name ILIKE '%checking%')
+        AND coa.account_type = 'ASSET'
+        AND li.debit_amount > 0
+        AND je.entry_date >= '2025-01-01' AND je.entry_date <= '2025-04-30'
+        AND je.is_void = false
+      ORDER BY je.entry_date, je.id
+    `);
+
+    // Get ALL journal entries for these months to find wire/deposit descriptions
+    const allEntries = await db.query(`
+      SELECT je.id, je.entry_date, je.description, je.memo, je.entry_type, je.source
+      FROM journal_entries je
+      WHERE je.entry_date >= '2025-01-01' AND je.entry_date <= '2025-04-30'
+        AND je.is_void = false
+        AND (je.description ILIKE '%wire%' OR je.description ILIKE '%deposit%'
+             OR je.description ILIKE '%management%' OR je.description ILIKE '%fee%'
+             OR je.description ILIKE '%maredin wealth%' OR je.description ILIKE '%wells fargo%'
+             OR je.description ILIKE '%interactive broker%' OR je.description ILIKE '%citibank%')
+      ORDER BY je.entry_date, je.id
+    `);
+
+    res.json({ revenueAccounts, revenueEntries, deposits, allEntries });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // SPA fallback — serve index.html for all non-API routes
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {
