@@ -58,15 +58,12 @@ app.get('/api/health', (req, res) => {
 
 // Migration status check (temporary diagnostic)
 app.get('/api/migration-status', async (req, res) => {
-  try {
-    const p = getPool();
-    if (!p) return res.json({ error: 'No DB pool' });
-    const mig = await p.query('SELECT * FROM migrations ORDER BY ran_at');
-    const rev = await p.query(`SELECT id, account_name, account_type, is_active FROM chart_of_accounts WHERE account_type = 'REVENUE' ORDER BY account_name`);
-    res.json({ migrations: mig.rows, revenueAccounts: rev.rows });
-  } catch (err) {
-    res.json({ error: err.message });
-  }
+  const p = getPool();
+  if (!p) return res.json({ error: 'No DB pool' });
+  let migrations = [], revenueAccounts = [];
+  try { migrations = (await p.query('SELECT * FROM migrations ORDER BY ran_at')).rows; } catch(e) { migrations = [{error: e.message}]; }
+  try { revenueAccounts = (await p.query(`SELECT id, account_name, account_type, is_active FROM chart_of_accounts WHERE account_type = 'REVENUE' ORDER BY account_name`)).rows; } catch(e) { revenueAccounts = [{error: e.message}]; }
+  res.json({ migrations, revenueAccounts });
 });
 
 
