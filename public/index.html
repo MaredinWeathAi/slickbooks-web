@@ -538,7 +538,11 @@
         <div class="nav-section-title">Banking</div>
         <div class="nav-link" onclick="switchView('import')" data-view="import">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-          Bank Import
+          Bank & CC Statements
+        </div>
+        <div class="nav-link" onclick="switchView('reconciliation')" data-view="reconciliation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Reconciliation
         </div>
         <div class="nav-link" onclick="switchView('fees')" data-view="fees">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
@@ -802,55 +806,121 @@
         </div>
       </div>
 
-      <!-- ═══════ BANK IMPORT VIEW ═══════ -->
+      <!-- ═══════ BANK & CC IMPORT VIEW ═══════ -->
       <div class="view" id="import-view">
         <div class="page-header">
           <div>
-            <div class="page-title">Bank Import</div>
-            <div class="page-subtitle">Upload bank statements to create journal entries</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="dropzone" id="import-dropzone" onclick="document.getElementById('import-file-input').click()">
-            <div class="dropzone-icon">📄</div>
-            <div class="dropzone-text">Drop bank statement files here or click to browse</div>
-            <div class="dropzone-hint">Supports PDF, CSV, TXT (Bank of America, Chase, Interactive Brokers)</div>
-          </div>
-          <input type="file" id="import-file-input" accept=".pdf,.csv,.txt,.tsv" multiple style="display:none" onchange="handleImportUpload(this.files)">
-        </div>
-
-        <div id="import-results" style="display:none;">
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Parsed Transactions</div>
-              <div class="btn-group">
-                <select id="import-bank-account" class="form-select" style="width:auto;"></select>
-                <button class="btn btn-success" onclick="importToLedger()">Import to Ledger</button>
-              </div>
-            </div>
-            <div class="table-wrapper">
-              <table class="data-table">
-                <thead>
-                  <tr><th><input type="checkbox" id="import-select-all" onchange="toggleAllImportRows(this.checked)"></th><th>Date</th><th>Description</th><th>Type</th><th class="text-right">Amount</th></tr>
-                </thead>
-                <tbody id="import-tbody"></tbody>
-              </table>
-            </div>
+            <div class="page-title">Bank & CC Statements</div>
+            <div class="page-subtitle">Upload bank and credit card statements to create journal entries</div>
           </div>
         </div>
 
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Import History</div>
+            <div class="card-title">Import Type</div>
           </div>
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr><th>Date</th><th>File</th><th>Bank</th><th>Transactions</th><th>Status</th></tr>
-              </thead>
-              <tbody id="import-history-tbody"></tbody>
-            </table>
+          <div style="padding:16px;">
+            <div style="display:flex;gap:12px;margin-bottom:16px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;">
+                <input type="radio" name="import-type" value="bank" checked onchange="switchImportType('bank')">
+                <span style="font-weight:500;">Bank Statement</span>
+                <span style="font-size:12px;color:var(--text-muted);">(PDF, CSV, TXT)</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;">
+                <input type="radio" name="import-type" value="cc" onchange="switchImportType('cc')">
+                <span style="font-weight:500;">Credit Card Statement</span>
+                <span style="font-size:12px;color:var(--text-muted);">(CSV - Bank of America)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bank Statement Upload -->
+        <div id="bank-import-section">
+          <div class="card">
+            <div class="dropzone" id="import-dropzone" onclick="document.getElementById('import-file-input').click()">
+              <div class="dropzone-icon">📄</div>
+              <div class="dropzone-text">Drop bank statement files here or click to browse</div>
+              <div class="dropzone-hint">Supports PDF, CSV, TXT (Bank of America, Chase, Interactive Brokers)</div>
+            </div>
+            <input type="file" id="import-file-input" accept=".pdf,.csv,.txt,.tsv" multiple style="display:none" onchange="handleImportUpload(this.files)">
+          </div>
+
+          <div id="import-results" style="display:none;">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Parsed Transactions</div>
+                <div class="btn-group">
+                  <select id="import-bank-account" class="form-select" style="width:auto;"></select>
+                  <button class="btn btn-success" onclick="importToLedger()">Import to Ledger</button>
+                </div>
+              </div>
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead>
+                    <tr><th><input type="checkbox" id="import-select-all" onchange="toggleAllImportRows(this.checked)"></th><th>Date</th><th>Description</th><th>Type</th><th class="text-right">Amount</th></tr>
+                  </thead>
+                  <tbody id="import-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Bank Import History</div>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Date</th><th>File</th><th>Bank</th><th>Transactions</th><th>Status</th></tr>
+                </thead>
+                <tbody id="import-history-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- CC Statement Upload -->
+        <div id="cc-import-section" style="display:none;">
+          <div class="card">
+            <div class="dropzone" id="cc-dropzone" onclick="document.getElementById('cc-file-input').click()">
+              <div class="dropzone-icon">💳</div>
+              <div class="dropzone-text">Drop credit card statement files here or click to browse</div>
+              <div class="dropzone-hint">Supports CSV format from Bank of America</div>
+            </div>
+            <input type="file" id="cc-file-input" accept=".csv,.txt" multiple style="display:none" onchange="handleCCImportUpload(this.files)">
+          </div>
+
+          <div id="cc-import-results" style="display:none;">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Parsed CC Transactions with Account Mapping</div>
+                <button class="btn btn-success" onclick="importCCToLedger()">Import to Ledger</button>
+              </div>
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead>
+                    <tr><th>Date</th><th>Description</th><th class="text-right">Amount</th><th>Suggested Account</th><th>Map to Account</th></tr>
+                  </thead>
+                  <tbody id="cc-import-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">CC Import History</div>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Date</th><th>File</th><th>Transactions</th><th>Status</th></tr>
+                </thead>
+                <tbody id="cc-history-tbody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -929,6 +999,91 @@
                 <tr><th>Date</th><th>File</th><th>Source</th><th>Period</th><th>Fees</th><th class="text-right">Total</th><th>Status</th></tr>
               </thead>
               <tbody id="fee-history-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ RECONCILIATION VIEW ═══════ -->
+      <div class="view" id="reconciliation-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Reconciliation</div>
+            <div class="page-subtitle">Compare bank/CC statements with GL entries and review findings</div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="runReconciliation()">Run Reconciliation</button>
+          </div>
+        </div>
+
+        <!-- Last Import Timestamps -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
+          <div class="card" style="padding:16px;text-align:center;">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Last Bank Import</div>
+            <div style="font-size:16px;font-weight:600;" id="recon-last-bank-import">--</div>
+          </div>
+          <div class="card" style="padding:16px;text-align:center;">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Last CC Import</div>
+            <div style="font-size:16px;font-weight:600;" id="recon-last-cc-import">--</div>
+          </div>
+          <div class="card" style="padding:16px;text-align:center;">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Last Reconciliation Run</div>
+            <div style="font-size:16px;font-weight:600;" id="recon-last-run">--</div>
+          </div>
+        </div>
+
+        <!-- Reconciliation Status Dashboard -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Reconciliation Status</div>
+          </div>
+          <div style="padding:20px;">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+              <div style="text-align:center;">
+                <div style="font-size:28px;font-weight:700;color:var(--success);margin-bottom:4px;">✓</div>
+                <div style="font-size:12px;color:var(--text-muted);">Matched Items</div>
+                <div style="font-size:18px;font-weight:600;" id="recon-matched">0</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:28px;font-weight:700;color:var(--warning);margin-bottom:4px;">⚠</div>
+                <div style="font-size:12px;color:var(--text-muted);">GL Entries</div>
+                <div style="font-size:18px;font-weight:600;" id="recon-gl-count">0</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:28px;font-weight:700;color:var(--warning);margin-bottom:4px;">⚠</div>
+                <div style="font-size:12px;color:var(--text-muted);">Bank Transactions</div>
+                <div style="font-size:18px;font-weight:600;" id="recon-bank-txn">0</div>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-size:28px;font-weight:700;color:var(--danger);margin-bottom:4px;">✕</div>
+                <div style="font-size:12px;color:var(--text-muted);">Unmatched Items</div>
+                <div style="font-size:18px;font-weight:600;" id="recon-unmatched">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Analysis Findings -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">AI Analysis - Key Findings</div>
+          </div>
+          <div style="padding:20px;" id="recon-findings">
+            <div style="text-align:center;color:var(--text-muted);">Click "Run Reconciliation" to generate findings</div>
+          </div>
+        </div>
+
+        <!-- Recent Imports -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Recent Bank & CC Imports</div>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr><th>Date</th><th>File</th><th>Type</th><th>Transactions</th><th>Status</th></tr>
+              </thead>
+              <tbody id="recon-imports-tbody"></tbody>
             </table>
           </div>
         </div>
@@ -1311,6 +1466,8 @@
     searchLimit: 50,
     selectedReport: 'pnl',
     importTransactions: [],
+    parsedCCTransactions: [],
+    parsedFees: [],
     lineItems: []
   };
 
@@ -1466,6 +1623,7 @@
     else if (view === 'fees') loadFeeHistory();
     else if (view === 'qbimport') {} // static view, no data load needed
     else if (view === 'dataquality') runDataQuality();
+    else if (view === 'reconciliation') runReconciliation();
   };
 
   /* ── Load all accounts (for dropdowns) ──────────────── */
@@ -2735,6 +2893,16 @@
         body: { transactions: selectedTxns, bankAccountId: parseInt(bankAccountId) }
       });
 
+      // Track bank import timestamp
+      try {
+        await api('/api/reconciliation/update-import-date', {
+          method: 'POST',
+          body: { importType: 'bank' }
+        });
+      } catch (e) {
+        // Ignore if reconciliation API not ready
+      }
+
       toast(`Imported ${data.data.created} entries (${data.data.skipped} skipped)`, 'success');
       state.importTransactions = [];
       document.getElementById('import-results').style.display = 'none';
@@ -3122,6 +3290,259 @@
       if (e.dataTransfer.files.length > 0) handleQBUpload(e.dataTransfer.files);
     });
   }
+
+  /* ── Bank & CC Import Functions ────────────────────── */
+  window.switchImportType = function(type) {
+    const bankSection = document.getElementById('bank-import-section');
+    const ccSection = document.getElementById('cc-import-section');
+    if (type === 'bank') {
+      bankSection.style.display = '';
+      ccSection.style.display = 'none';
+    } else {
+      bankSection.style.display = 'none';
+      ccSection.style.display = '';
+      loadCCImportHistory();
+    }
+  };
+
+  window.handleCCImportUpload = async function(files) {
+    if (!files || files.length === 0) return;
+    const formData = new FormData();
+    for (let f of files) formData.append('files', f);
+
+    try {
+      toast('Parsing credit card statements...', 'info');
+      const resp = await fetch('/api/cc-import/upload', { method: 'POST', body: formData, credentials: 'include' });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Upload failed');
+
+      if (data.files && data.files.length > 0) {
+        const parseResult = data.files[0];
+        if (parseResult.success) {
+          state.parsedCCTransactions = parseResult.transactions || [];
+          renderCCImportPreview();
+          document.getElementById('cc-import-results').style.display = '';
+          toast('Credit card statement parsed successfully (' + parseResult.transactions.length + ' transactions)', 'success');
+        } else {
+          toast('Parse failed: ' + (parseResult.error || 'Unknown error'), 'error');
+        }
+      }
+    } catch (err) {
+      toast('CC import upload failed: ' + err.message, 'error');
+    }
+    document.getElementById('cc-file-input').value = '';
+  };
+
+  function renderCCImportPreview() {
+    const tbody = document.getElementById('cc-import-tbody');
+    if (!state.parsedCCTransactions || state.parsedCCTransactions.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5">No transactions to display</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = state.parsedCCTransactions.map((txn, i) => {
+      const selectId = 'cc-acct-' + i;
+      return `
+        <tr>
+          <td>${txn.date}</td>
+          <td>${escHtml(txn.description)}</td>
+          <td class="amount text-right">${fmtCurrency(txn.amount)}</td>
+          <td style="font-size:12px;color:var(--text-muted);">${txn.suggestedMapping ? escHtml(txn.suggestedMapping.accountName) : 'Not found'}</td>
+          <td>
+            <select id="${selectId}" class="form-select" style="width:100%;padding:4px;font-size:12px;">
+              <option value="">-- Select Account --</option>
+            </select>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Populate account selects
+    loadAllAccounts().then(() => {
+      const accountsByName = {};
+      if (state.accountsList) {
+        state.accountsList.forEach(a => {
+          accountsByName[a.account_name] = a.id;
+        });
+      }
+
+      state.parsedCCTransactions.forEach((txn, i) => {
+        const selectId = 'cc-acct-' + i;
+        const select = document.getElementById(selectId);
+        if (select && state.accountsList) {
+          select.innerHTML = '<option value="">-- Select Account --</option>' +
+            state.accountsList
+              .filter(a => a.account_type === 'EXPENSE')
+              .map(a => `<option value="${a.id}">${escHtml(a.account_name)}</option>`)
+              .join('');
+
+          // Auto-select suggested if available
+          if (txn.suggestedMapping && accountsByName[txn.suggestedMapping.accountName]) {
+            select.value = accountsByName[txn.suggestedMapping.accountName];
+          }
+        }
+      });
+    });
+  }
+
+  window.importCCToLedger = async function() {
+    if (!state.parsedCCTransactions || state.parsedCCTransactions.length === 0) {
+      toast('No transactions to import', 'error');
+      return;
+    }
+
+    const mappings = {};
+    state.parsedCCTransactions.forEach((txn, i) => {
+      const selectId = 'cc-acct-' + i;
+      const select = document.getElementById(selectId);
+      if (select && select.value) {
+        mappings[txn.description] = parseInt(select.value);
+      }
+    });
+
+    if (Object.keys(mappings).length === 0) {
+      toast('Please map at least one transaction to an account', 'error');
+      return;
+    }
+
+    try {
+      toast('Importing credit card transactions...', 'info');
+      const data = await api('/api/cc-import/to-ledger', {
+        method: 'POST',
+        body: {
+          transactions: state.parsedCCTransactions,
+          mappings: mappings
+        }
+      });
+
+      const r = data.data;
+      toast('CC import complete: ' + r.created + ' entries created', 'success');
+      if (r.errors && r.errors.length > 0) console.warn('CC import errors:', r.errors);
+
+      state.parsedCCTransactions = [];
+      document.getElementById('cc-import-results').style.display = 'none';
+      loadCCImportHistory();
+    } catch (err) {
+      toast('CC import failed: ' + err.message, 'error');
+    }
+  };
+
+  async function loadCCImportHistory() {
+    try {
+      const data = await api('/api/import/history');
+      const history = (data.data || []).filter(h => h.metadata && JSON.parse(h.metadata || '{}').import_type === 'cc');
+      const tbody = document.getElementById('cc-history-tbody');
+      if (history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:20px;">No CC imports yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = history.map(h => `
+        <tr>
+          <td>${fmtDate(h.import_date)}</td>
+          <td>${escHtml(h.file_name || '')}</td>
+          <td>${h.transaction_count}</td>
+          <td><span class="tag ${h.status === 'imported' ? 'tag-green' : 'tag-yellow'}">${escHtml(h.status)}</span></td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      console.error('Failed to load CC import history:', err);
+    }
+  }
+
+  /* Drag & Drop for CC Import */
+  const ccDropzone = document.getElementById('cc-dropzone');
+  if (ccDropzone) {
+    ['dragenter', 'dragover'].forEach(evt => {
+      ccDropzone.addEventListener(evt, e => { e.preventDefault(); ccDropzone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+      ccDropzone.addEventListener(evt, e => { e.preventDefault(); ccDropzone.classList.remove('dragover'); });
+    });
+    ccDropzone.addEventListener('drop', e => {
+      if (e.dataTransfer.files.length > 0) handleCCImportUpload(e.dataTransfer.files);
+    });
+  }
+
+  /* ── Reconciliation Functions ────────────────────────── */
+  window.runReconciliation = async function() {
+    try {
+      toast('Running reconciliation...', 'info');
+
+      // Get dashboard data
+      const dashData = await api('/api/reconciliation/dashboard');
+      const d = dashData.data;
+
+      // Get findings
+      const findingsData = await api('/api/reconciliation/analysis');
+      const findings = findingsData.data.findings || [];
+
+      // Update metadata displays
+      const lastBankEl = document.getElementById('recon-last-bank-import');
+      const lastCCEl = document.getElementById('recon-last-cc-import');
+      const lastRunEl = document.getElementById('recon-last-run');
+
+      if (d.metadata) {
+        lastBankEl.textContent = d.metadata.lastBankImport ? fmtDate(d.metadata.lastBankImport) : 'Never';
+        lastCCEl.textContent = d.metadata.lastCCImport ? fmtDate(d.metadata.lastCCImport) : 'Never';
+        lastRunEl.textContent = d.metadata.lastReconciliationRun ? fmtDate(d.metadata.lastReconciliationRun) : 'Never';
+      }
+
+      // Update summary
+      const summary = d.summary || {};
+      document.getElementById('recon-matched').textContent = Math.min(summary.bankTransactionCount || 0, summary.glEntryCount || 0);
+      document.getElementById('recon-gl-count').textContent = summary.glEntryCount || 0;
+      document.getElementById('recon-bank-txn').textContent = (summary.bankTransactionCount || 0) + (summary.ccTransactionCount || 0);
+      document.getElementById('recon-unmatched').textContent = Math.abs((summary.bankTransactionCount || 0) - (summary.glEntryCount || 0));
+
+      // Render findings
+      const findingsHtml = findings.length === 0
+        ? '<div style="text-align:center;color:var(--text-muted);">No findings - reconciliation is clean!</div>'
+        : findings.map(f => {
+            const severityColor = f.severity === 'CRITICAL' ? '#dc2626' : f.severity === 'HIGH' ? '#f97316' : f.severity === 'MEDIUM' ? '#f59e0b' : '#6366f1';
+            return `
+              <div style="border-left:4px solid ${severityColor};padding:12px 16px;margin-bottom:12px;background:var(--bg-secondary);border-radius:4px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+                  <strong style="color:${severityColor};">${escHtml(f.severity)}: ${escHtml(f.category)}</strong>
+                  <span style="font-size:12px;background:${severityColor};color:#fff;padding:2px 8px;border-radius:3px;">${f.itemCount} item${f.itemCount !== 1 ? 's' : ''}</span>
+                </div>
+                <div style="font-size:14px;margin-bottom:6px;">${escHtml(f.issue)}</div>
+                <div style="font-size:12px;color:var(--text-muted);">Action: ${escHtml(f.recommendation)}</div>
+              </div>
+            `;
+          }).join('');
+
+      document.getElementById('recon-findings').innerHTML = findingsHtml;
+
+      // Render recent imports
+      const allImports = [...(d.recentBankImports || []), ...(d.recentCCImports || [])]
+        .sort((a, b) => new Date(b.import_date) - new Date(a.import_date))
+        .slice(0, 10);
+
+      const importsHtml = allImports.length === 0
+        ? '<tr><td colspan="5" class="text-center text-muted" style="padding:20px;">No recent imports</td></tr>'
+        : allImports.map(imp => `
+          <tr>
+            <td>${fmtDate(imp.import_date)}</td>
+            <td>${escHtml(imp.file_name)}</td>
+            <td><span class="tag ${imp.metadata && JSON.parse(imp.metadata || '{}').import_type === 'cc' ? 'tag-purple' : 'tag-blue'}">
+              ${imp.metadata && JSON.parse(imp.metadata || '{}').import_type === 'cc' ? 'CC' : 'Bank'}
+            </span></td>
+            <td>${imp.transaction_count}</td>
+            <td><span class="tag ${imp.status === 'imported' ? 'tag-green' : 'tag-yellow'}">${escHtml(imp.status)}</span></td>
+          </tr>
+        `).join('');
+
+      document.getElementById('recon-imports-tbody').innerHTML = importsHtml;
+
+      // Mark reconciliation as run
+      await api('/api/reconciliation/run', { method: 'POST' });
+
+      toast('Reconciliation complete', 'success');
+    } catch (err) {
+      console.error('Reconciliation error:', err);
+      toast('Reconciliation failed: ' + err.message, 'error');
+    }
+  };
 
   /* ── Data Quality Functions ────────────────────────── */
   window.runDataQuality = async function() {

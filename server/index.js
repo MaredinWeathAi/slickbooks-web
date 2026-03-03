@@ -80,6 +80,8 @@ const importRoutes = require('./routes/import');
 const feesRoutes = require('./routes/fees');
 const qbImportRoutes = require('./routes/qb-import');
 const recurringRoutes = require('./routes/recurring');
+const ccImportRoutes = require('./routes/cc-import');
+const reconciliationRoutes = require('./routes/reconciliation');
 
 app.use('/api', authRoutes);
 app.use('/api', accountsRoutes);
@@ -90,6 +92,8 @@ app.use('/api', importRoutes);
 app.use('/api', feesRoutes);
 app.use('/api', qbImportRoutes);
 app.use('/api', recurringRoutes);
+app.use('/api', ccImportRoutes);
+app.use('/api', reconciliationRoutes);
 
 // SPA fallback — serve index.html for all non-API routes
 app.get('*', (req, res) => {
