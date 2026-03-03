@@ -96,6 +96,25 @@ async function initializeDatabase() {
       )
     `);
 
+    // Recurring Entries (templates for auto-generated JEs)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS recurring_entries (
+        id SERIAL PRIMARY KEY,
+        description TEXT NOT NULL,
+        entry_template JSONB NOT NULL,
+        frequency VARCHAR(20) NOT NULL CHECK (frequency IN ('MONTHLY', 'QUARTERLY', 'ANNUALLY')),
+        next_run_date DATE NOT NULL,
+        end_date DATE,
+        is_active BOOLEAN DEFAULT TRUE,
+        last_run_date DATE,
+        run_count INTEGER DEFAULT 0,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_recurring_active ON recurring_entries(is_active, next_run_date)`);
+
     // Bank Reconciliations
     await client.query(`
       CREATE TABLE IF NOT EXISTS bank_reconciliations (

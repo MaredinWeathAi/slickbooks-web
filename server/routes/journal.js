@@ -90,8 +90,8 @@ router.post('/journal-entries', requireAuth, async (req, res) => {
   try {
     const { entry_date, description, entry_type, source, memo, is_posted, line_items } = req.body;
 
-    if (!entry_date || !line_items || line_items.length < 2) {
-      return res.status(400).json({ success: false, error: 'Date and at least 2 line items required' });
+    if (!entry_date || !line_items || line_items.length < 1) {
+      return res.status(400).json({ success: false, error: 'Date and at least 1 line item required' });
     }
 
     // Validate balanced
