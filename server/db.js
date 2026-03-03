@@ -128,6 +128,24 @@ async function initializeDatabase() {
       )
     `);
 
+    // Fee Imports — tracks parsed advisory fee statements
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fee_imports (
+        id SERIAL PRIMARY KEY,
+        file_name VARCHAR(255),
+        source VARCHAR(50),
+        report_type VARCHAR(100),
+        statement_period VARCHAR(200),
+        fee_count INTEGER DEFAULT 0,
+        total_amount NUMERIC(15,2) DEFAULT 0,
+        fees_data JSONB DEFAULT '[]',
+        status VARCHAR(20) DEFAULT 'parsed',
+        journal_entry_ids JSONB DEFAULT '[]',
+        imported_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // Activity Feed
     await client.query(`
       CREATE TABLE IF NOT EXISTS activity_feed (

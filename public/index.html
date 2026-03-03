@@ -298,6 +298,8 @@
     .tag-blue { background: #dbeafe; color: #1d4ed8; }
     .tag-green { background: #dcfce7; color: #15803d; }
     .tag-yellow { background: #fef3c7; color: #92400e; }
+    .tag-purple { background: #ede9fe; color: #6d28d9; }
+    .tag-red { background: #fef2f2; color: #dc2626; }
     .tag-red { background: #fee2e2; color: #dc2626; }
     .tag-gray { background: #f1f5f9; color: #475569; }
     .tag-purple { background: #ede9fe; color: #6d28d9; }
@@ -520,6 +522,10 @@
         <div class="nav-link" onclick="switchView('import')" data-view="import">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           Bank Import
+        </div>
+        <div class="nav-link" onclick="switchView('fees')" data-view="fees">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Fee Import
         </div>
       </div>
     </nav>
@@ -763,6 +769,85 @@
                 <tr><th>Date</th><th>File</th><th>Bank</th><th>Transactions</th><th>Status</th></tr>
               </thead>
               <tbody id="import-history-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ FEE IMPORT VIEW ═══════ -->
+      <div class="view" id="fees-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Advisory Fee Import</div>
+            <div class="page-subtitle">Upload IBKR or Schwab fee statements to record advisory fee revenue</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="dropzone" id="fee-dropzone" onclick="document.getElementById('fee-file-input').click()">
+            <div class="dropzone-icon">💰</div>
+            <div class="dropzone-text">Drop fee statement PDFs here or click to browse</div>
+            <div class="dropzone-hint">Supports Interactive Brokers Activity Statements and Schwab Management Fee Reports</div>
+          </div>
+          <input type="file" id="fee-file-input" accept=".pdf" multiple style="display:none" onchange="handleFeeUpload(this.files)">
+        </div>
+
+        <!-- Parsed Fee Results -->
+        <div id="fee-results" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title" id="fee-results-title">Parsed Fees</div>
+                <div style="font-size:12px;color:var(--text-muted);" id="fee-results-summary"></div>
+              </div>
+              <div class="btn-group" style="display:flex;gap:8px;align-items:center;">
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  <label style="font-size:11px;color:var(--text-muted);font-weight:600;">Revenue Account</label>
+                  <select id="fee-revenue-account" class="form-select" style="width:auto;min-width:200px;"></select>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  <label style="font-size:11px;color:var(--text-muted);font-weight:600;">Cash/Receivable Account</label>
+                  <select id="fee-receivable-account" class="form-select" style="width:auto;min-width:200px;"></select>
+                </div>
+                <button class="btn btn-success" onclick="importFeesToLedger()" style="align-self:flex-end;">Import to Ledger</button>
+              </div>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="fee-select-all" onchange="toggleAllFeeRows(this.checked)" checked></th>
+                    <th>Source</th>
+                    <th>Date</th>
+                    <th>Client</th>
+                    <th>Account Alias</th>
+                    <th>Account Type</th>
+                    <th class="text-right">Fee Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="fee-tbody"></tbody>
+                <tfoot>
+                  <tr style="font-weight:700;background:var(--bg-secondary);">
+                    <td colspan="6" class="text-right">Total Selected:</td>
+                    <td class="text-right amount" id="fee-total-selected">$0.00</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fee Import History -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Fee Import History</div>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr><th>Date</th><th>File</th><th>Source</th><th>Period</th><th>Fees</th><th class="text-right">Total</th><th>Status</th></tr>
+              </thead>
+              <tbody id="fee-history-tbody"></tbody>
             </table>
           </div>
         </div>
@@ -1089,6 +1174,7 @@
     else if (view === 'accounts') loadAccounts();
     else if (view === 'journal') loadJournalEntries();
     else if (view === 'import') loadImportHistory();
+    else if (view === 'fees') loadFeeHistory();
   };
 
   /* ── Load all accounts (for dropdowns) ──────────────── */
@@ -2063,6 +2149,186 @@
     } catch (err) {
       console.error('Failed to load import history:', err);
     }
+  }
+
+  /* ── Advisory Fee Import ─────────────────────────────── */
+  state.parsedFees = [];
+
+  window.handleFeeUpload = async function(files) {
+    if (!files || files.length === 0) return;
+    const formData = new FormData();
+    for (let f of files) formData.append('files', f);
+
+    try {
+      toast('Parsing fee statements...', 'info');
+      const resp = await fetch('/api/fees/parse', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Upload failed');
+
+      // Collect all fees from all files
+      let allFees = [];
+      const fileNames = [];
+      (data.files || []).forEach(f => {
+        if (f.success && f.fees) {
+          allFees.push(...f.fees);
+          fileNames.push(f.fileName);
+        } else if (f.error) {
+          toast(`Error in ${f.fileName}: ${f.error}`, 'error');
+        }
+      });
+
+      if (allFees.length === 0) {
+        toast('No fees found in uploaded files', 'error');
+        return;
+      }
+
+      state.parsedFees = allFees;
+      renderFeeResults(data.files || []);
+      toast(`Found ${allFees.length} fees totaling ${fmtCurrency(allFees.reduce((s,f) => s + f.amount, 0))}`, 'success');
+    } catch (err) {
+      toast('Fee parse failed: ' + err.message, 'error');
+    }
+    document.getElementById('fee-file-input').value = '';
+  };
+
+  function renderFeeResults(fileResults) {
+    const container = document.getElementById('fee-results');
+    container.style.display = 'block';
+
+    // Build summary
+    const sources = [...new Set(state.parsedFees.map(f => f.source))];
+    const totalAmt = state.parsedFees.reduce((s, f) => s + f.amount, 0);
+    document.getElementById('fee-results-title').textContent = `Parsed Fees (${state.parsedFees.length})`;
+    document.getElementById('fee-results-summary').textContent =
+      `${sources.join(' + ')} | ${state.parsedFees.length} fees | ${fmtCurrency(totalAmt)} total`;
+
+    // Populate revenue account dropdown (REVENUE type accounts)
+    const revSelect = document.getElementById('fee-revenue-account');
+    const revAccounts = state.accountsList.filter(a => a.account_type === 'REVENUE');
+    revSelect.innerHTML = '<option value="">-- Select Revenue Account --</option>' +
+      revAccounts.map(a => `<option value="${a.id}"${/fee|advisory|management/i.test(a.account_name) ? ' selected' : ''}>${escHtml(a.account_number ? a.account_number + ' - ' : '')}${escHtml(a.account_name)}</option>`).join('');
+
+    // Populate receivable/cash dropdown (ASSET type accounts)
+    const recvSelect = document.getElementById('fee-receivable-account');
+    const assetAccounts = state.accountsList.filter(a => a.account_type === 'ASSET');
+    recvSelect.innerHTML = '<option value="">-- Select Cash/Receivable Account --</option>' +
+      assetAccounts.map(a => `<option value="${a.id}"${/cash|receiv|custodian|ibkr|schwab|broker/i.test(a.account_name) ? ' selected' : ''}>${escHtml(a.account_number ? a.account_number + ' - ' : '')}${escHtml(a.account_name)}</option>`).join('');
+
+    // Render fee rows
+    const tbody = document.getElementById('fee-tbody');
+    tbody.innerHTML = state.parsedFees.map((f, i) => `
+      <tr>
+        <td><input type="checkbox" class="fee-check" data-idx="${i}" checked onchange="updateFeeTotal()"></td>
+        <td><span class="tag ${f.source === 'IBKR' ? 'tag-blue' : 'tag-purple'}">${escHtml(f.source)}</span></td>
+        <td>${escHtml(f.date || '')}</td>
+        <td>${escHtml(f.clientName || '')}</td>
+        <td style="font-weight:500;">${escHtml(f.accountAlias || f.accountNumber || '')}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${escHtml(f.accountType || '')}</td>
+        <td class="amount text-right">${fmtCurrency(f.amount)}</td>
+      </tr>
+    `).join('');
+
+    updateFeeTotal();
+  }
+
+  window.updateFeeTotal = function() {
+    let total = 0;
+    document.querySelectorAll('.fee-check:checked').forEach(cb => {
+      const idx = parseInt(cb.dataset.idx);
+      total += state.parsedFees[idx].amount;
+    });
+    document.getElementById('fee-total-selected').textContent = fmtCurrency(total);
+  };
+
+  window.toggleAllFeeRows = function(checked) {
+    document.querySelectorAll('.fee-check').forEach(cb => cb.checked = checked);
+    updateFeeTotal();
+  };
+
+  window.importFeesToLedger = async function() {
+    const revenueAccountId = document.getElementById('fee-revenue-account').value;
+    const receivableAccountId = document.getElementById('fee-receivable-account').value;
+
+    if (!revenueAccountId) { toast('Please select a Revenue account (e.g., Advisory Fee Income)', 'error'); return; }
+    if (!receivableAccountId) { toast('Please select a Cash/Receivable account', 'error'); return; }
+
+    // Collect selected fees
+    const selectedFees = [];
+    document.querySelectorAll('.fee-check:checked').forEach(cb => {
+      const idx = parseInt(cb.dataset.idx);
+      selectedFees.push(state.parsedFees[idx]);
+    });
+
+    if (selectedFees.length === 0) { toast('No fees selected', 'error'); return; }
+
+    const totalAmt = selectedFees.reduce((s, f) => s + f.amount, 0);
+    if (!confirm(`Import ${selectedFees.length} fees totaling ${fmtCurrency(totalAmt)} as journal entries?\n\nDR: Cash/Receivable\nCR: Advisory Fee Revenue`)) return;
+
+    try {
+      const data = await api('/api/fees/import', {
+        method: 'POST',
+        body: {
+          fees: selectedFees,
+          revenueAccountId: parseInt(revenueAccountId),
+          receivableAccountId: parseInt(receivableAccountId)
+        }
+      });
+
+      const r = data.data;
+      toast(`Imported ${r.created} fee entries (${r.skipped} skipped). Total: ${fmtCurrency(totalAmt)}`, 'success');
+      if (r.errors && r.errors.length > 0) {
+        console.warn('Fee import errors:', r.errors);
+      }
+
+      state.parsedFees = [];
+      document.getElementById('fee-results').style.display = 'none';
+      loadFeeHistory();
+    } catch (err) {
+      toast('Fee import failed: ' + err.message, 'error');
+    }
+  };
+
+  async function loadFeeHistory() {
+    try {
+      const data = await api('/api/fees/history');
+      const tbody = document.getElementById('fee-history-tbody');
+      const history = data.data || [];
+      if (history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:20px;">No fee imports yet. Upload an IBKR or Schwab fee statement above.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = history.map(h => `
+        <tr>
+          <td>${fmtDate(h.created_at)}</td>
+          <td>${escHtml(h.file_name || '')}</td>
+          <td><span class="tag ${h.source === 'IBKR' ? 'tag-blue' : 'tag-purple'}">${escHtml(h.source || '')}</span></td>
+          <td style="font-size:12px;">${escHtml(h.statement_period || '')}</td>
+          <td>${h.fee_count}</td>
+          <td class="amount text-right">${fmtCurrency(parseFloat(h.total_amount) || 0)}</td>
+          <td><span class="tag ${h.status === 'imported' ? 'tag-green' : 'tag-yellow'}">${escHtml(h.status)}</span></td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      console.error('Failed to load fee history:', err);
+    }
+  }
+
+  /* ── Drag & Drop for Fee Import ─────────────────────── */
+  const feeDropzone = document.getElementById('fee-dropzone');
+  if (feeDropzone) {
+    ['dragenter', 'dragover'].forEach(evt => {
+      feeDropzone.addEventListener(evt, e => { e.preventDefault(); feeDropzone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+      feeDropzone.addEventListener(evt, e => { e.preventDefault(); feeDropzone.classList.remove('dragover'); });
+    });
+    feeDropzone.addEventListener('drop', e => {
+      if (e.dataTransfer.files.length > 0) handleFeeUpload(e.dataTransfer.files);
+    });
   }
 
   /* ── Drag & Drop for Import ─────────────────────────── */
