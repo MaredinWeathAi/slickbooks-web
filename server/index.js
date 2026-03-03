@@ -56,6 +56,20 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'slickbooks-web', timestamp: new Date().toISOString() });
 });
 
+// Migration status check (temporary diagnostic)
+app.get('/api/migration-status', async (req, res) => {
+  try {
+    const db = require('./db');
+    const migrations = await db.query('SELECT * FROM migrations ORDER BY ran_at');
+    const revenueAccts = await db.query(
+      `SELECT id, account_name, account_type, is_active FROM chart_of_accounts WHERE account_type = 'REVENUE' ORDER BY account_name`
+    );
+    res.json({ migrations, revenueAccounts: revenueAccts });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 
 // Static files — serve the SPA
 app.use(express.static(path.join(__dirname, '..', 'public'), {
