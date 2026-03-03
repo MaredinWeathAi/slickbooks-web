@@ -52,8 +52,16 @@ if (pool) {
 app.use(session(sessionConfig));
 
 // Health check (Railway needs this BEFORE DB init)
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'slickbooks-web', timestamp: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  let tables = [];
+  try {
+    const p = getPool();
+    if (p) {
+      const r = await p.query("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename");
+      tables = r.rows.map(r => r.tablename);
+    }
+  } catch(e) {}
+  res.json({ status: 'ok', service: 'slickbooks-web', timestamp: new Date().toISOString(), tables });
 });
 
 
