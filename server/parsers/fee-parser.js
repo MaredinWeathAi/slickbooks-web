@@ -5,16 +5,25 @@
  *   2. Charles Schwab — "Management Fees" reports
  *
  * Uses pdfjs-dist (pure JS, no native deps) so it works on Railway.
+ * Note: pdfjs-dist v4+ is ESM-only, so we use dynamic import().
  */
 
-const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.mjs');
+let pdfjsLib = null;
+
+async function loadPdfjs() {
+  if (!pdfjsLib) {
+    pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  }
+  return pdfjsLib;
+}
 
 /**
  * Extract all text from a PDF buffer, page by page
  */
 async function extractPagesText(buffer) {
+  const lib = await loadPdfjs();
   const uint8 = new Uint8Array(buffer);
-  const doc = await pdfjsLib.getDocument({ data: uint8, useSystemFonts: true }).promise;
+  const doc = await lib.getDocument({ data: uint8, useSystemFonts: true }).promise;
   const pages = [];
 
   for (let i = 1; i <= doc.numPages; i++) {
