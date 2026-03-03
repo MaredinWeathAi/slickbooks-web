@@ -19,8 +19,43 @@ const XLSX = require('xlsx');
 function classifyAccount(name) {
   const n = (name || '').toLowerCase();
 
-  // ASSET accounts
-  if (/operating acct|bank|checking|savings|cash|undeposited funds/i.test(n))
+  // EXPENSE accounts — check FIRST to prevent partial word matches on ASSET rules
+  // (e.g. "bank charges" must not match the "bank" ASSET rule)
+  if (/bank charge|wire fee|interactive brokers fee|finance[:]|finance charge/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Finance Charges' };
+  if (/admin|overhead|dues|subscription|license|permit|office suppl|postage|software/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Administrative Overhead' };
+  if (/^auto\b|vehicle|mileage/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Auto Expenses' };
+  if (/communication|internet|phone|web host|wireless/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Communications' };
+  if (/education|training|conference/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Education & Training' };
+  if (/insurance/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Insurance' };
+  if (/marketing|advertising|hospitality|gift|sponsor|collateral|networking|marketing list/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Marketing' };
+  if (/rent|repair|maintenance|physical office/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Physical Office' };
+  if (/professional fee|accounting|compliance|consultant|legal|translation/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Professional Fees' };
+  if (/research material/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Research' };
+  if (/taxes? paid|penalt|interest paid/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Taxes' };
+  if (/travel|airline|hotel|meal|entertainment|parking|shuttle|rental car|baggage/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Travel' };
+  if (/uncategorized expense|miscellaneous expense/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Uncategorized' };
+  if (/intern|reimburse.*intern/i.test(n))
+    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Reimbursements' };
+
+  // ASSET accounts (checked after expenses to avoid "bank" matching "bank charges")
+  if (/operating acct|checking|savings|undeposited funds/i.test(n))
+    return { type: 'ASSET', normal: 'DEBIT', category: 'Bank Accounts' };
+  if (/\bbank\b/i.test(n) && !/charge|fee/i.test(n))
+    return { type: 'ASSET', normal: 'DEBIT', category: 'Bank Accounts' };
+  if (/\bcash\b/i.test(n) && !/unapplied cash/i.test(n))
     return { type: 'ASSET', normal: 'DEBIT', category: 'Bank Accounts' };
   if (/fixed asset|computer|equipment|furniture|vehicle/i.test(n))
     return { type: 'ASSET', normal: 'DEBIT', category: 'Fixed Assets' };
@@ -48,36 +83,6 @@ function classifyAccount(name) {
     return { type: 'REVENUE', normal: 'CREDIT', category: 'Income' };
   if (/client fee/i.test(n))
     return { type: 'REVENUE', normal: 'CREDIT', category: 'Advisory Fee Income' };
-
-  // EXPENSE accounts (everything else is likely expense)
-  if (/admin|overhead|dues|subscription|license|permit|office suppl|postage|software/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Administrative Overhead' };
-  if (/^auto|vehicle|mileage/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Auto Expenses' };
-  if (/communication|internet|phone|web host|wireless/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Communications' };
-  if (/education|training|conference/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Education & Training' };
-  if (/bank charge|wire fee|interactive brokers fee|finance[:]/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Finance Charges' };
-  if (/insurance/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Insurance' };
-  if (/marketing|advertising|hospitality|gift|sponsor|collateral|networking|marketing list/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Marketing' };
-  if (/rent|repair|maintenance|physical office/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Physical Office' };
-  if (/professional fee|accounting|compliance|consultant|legal|translation/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Professional Fees' };
-  if (/research material/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Research' };
-  if (/tax|penalt|interest paid/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Taxes' };
-  if (/travel|airline|hotel|meal|entertainment|parking|shuttle|rental car|baggage/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Travel' };
-  if (/uncategorized expense|miscellaneous expense/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Uncategorized' };
-  if (/intern|reimburse.*intern/i.test(n))
-    return { type: 'EXPENSE', normal: 'DEBIT', category: 'Reimbursements' };
 
   // Default fallback
   return { type: 'EXPENSE', normal: 'DEBIT', category: 'Other' };

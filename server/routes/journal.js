@@ -9,47 +9,58 @@ const db = require('../db');
 router.get('/journal-entries', requireAuth, async (req, res) => {
   try {
     const { limit = 50, offset = 0, isPosted, startDate, endDate, search } = req.query;
-    let sql = `SELECT je.*,
-      COALESCE(SUM(li.debit_amount), 0) as total_amount,
-      COUNT(li.id) as line_count
-      FROM journal_entries je
-      LEFT JOIN line_items li ON li.journal_entry_id = je.id
-      WHERE 1=1`;
+
+    // Build WHERE clause separately so we can reuse for count query
+    let whereClauses = ['1=1'];
     const params = [];
 
     if (isPosted !== undefined) {
       params.push(isPosted === 'true');
-      sql += ` AND je.is_posted = $${params.length}`;
+      whereClauses.push(`je.is_posted = $${params.length}`);
     }
     if (startDate) {
       params.push(startDate);
-      sql += ` AND je.entry_date >= $${params.length}`;
+      whereClauses.push(`je.entry_date >= $${params.length}`);
     }
     if (endDate) {
       params.push(endDate);
-      sql += ` AND je.entry_date <= $${params.length}`;
+      whereClauses.push(`je.entry_date <= $${params.length}`);
     }
     if (search) {
       params.push(`%${search}%`);
-      sql += ` AND (je.description ILIKE $${params.length} OR je.memo ILIKE $${params.length} OR je.entry_number ILIKE $${params.length})`;
+      whereClauses.push(`(je.description ILIKE $${params.length} OR je.memo ILIKE $${params.length} OR je.entry_number ILIKE $${params.length})`);
     }
 
-    sql += ' GROUP BY je.id ORDER BY je.entry_date DESC, je.id DESC';
+    const whereStr = whereClauses.join(' AND ');
 
-    // Count total
-    const countSql = sql.replace(/SELECT.*FROM/, 'SELECT COUNT(DISTINCT je.id) as total FROM').replace(/GROUP BY.*/, '');
+    // Count total (simple query, no JOIN needed)
+    const countSql = `SELECT COUNT(*) as total FROM journal_entries je WHERE ${whereStr}`;
     const countResult = await db.queryOne(countSql, params);
     const total = countResult ? parseInt(countResult.total) : 0;
 
-    params.push(parseInt(limit));
-    sql += ` LIMIT $${params.length}`;
-    params.push(parseInt(offset));
-    sql += ` OFFSET $${params.length}`;
+    // Main query with line item aggregates
+    const limitVal = parseInt(limit);
+    const offsetVal = parseInt(offset);
+    params.push(limitVal);
+    const limitParam = params.length;
+    params.push(offsetVal);
+    const offsetParam = params.length;
+
+    const sql = `SELECT je.*,
+      COALESCE(SUM(li.debit_amount), 0) as total_amount,
+      COUNT(li.id) as line_count
+      FROM journal_entries je
+      LEFT JOIN line_items li ON li.journal_entry_id = je.id
+      WHERE ${whereStr}
+      GROUP BY je.id
+      ORDER BY je.entry_date DESC, je.id DESC
+      LIMIT $${limitParam} OFFSET $${offsetParam}`;
 
     const entries = await db.query(sql, params);
 
-    res.json({ success: true, data: { entries, total, limit: parseInt(limit), offset: parseInt(offset) } });
+    res.json({ success: true, data: { entries, total, limit: limitVal, offset: offsetVal } });
   } catch (err) {
+    console.error('[Journal] Error loading entries:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

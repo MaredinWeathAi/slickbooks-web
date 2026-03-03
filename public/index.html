@@ -531,6 +531,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9,15 12,12 15,15"/></svg>
           QB Import
         </div>
+        <div class="nav-link" onclick="switchView('dataquality')" data-view="dataquality">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          Data Quality
+        </div>
       </div>
     </nav>
 
@@ -946,6 +950,92 @@
         </div>
       </div>
 
+      <!-- Data Quality View -->
+      <div class="view" id="dataquality-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Data Quality Check</div>
+            <div class="page-subtitle">Review data integrity, date gaps, and account classifications</div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary" onclick="runDataQuality()">Run Check</button>
+            <button class="btn btn-warning" onclick="fixClassifications()">Fix Classifications</button>
+          </div>
+        </div>
+
+        <div id="dq-loading" style="display:none;text-align:center;padding:40px;">
+          <div class="spinner" style="margin:0 auto 12px;"></div>
+          <div style="color:var(--text-muted);">Analyzing data quality...</div>
+        </div>
+
+        <div id="dq-results" style="display:none;">
+          <!-- Summary Cards -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+            <div class="card" style="padding:20px;text-align:center;">
+              <div style="font-size:28px;font-weight:700;color:var(--accent);" id="dq-total-entries">--</div>
+              <div style="font-size:12px;color:var(--text-muted);">Total Entries</div>
+            </div>
+            <div class="card" style="padding:20px;text-align:center;">
+              <div style="font-size:28px;font-weight:700;" id="dq-date-range">--</div>
+              <div style="font-size:12px;color:var(--text-muted);">Date Range</div>
+            </div>
+            <div class="card" style="padding:20px;text-align:center;">
+              <div style="font-size:28px;font-weight:700;" id="dq-gap-count">--</div>
+              <div style="font-size:12px;color:var(--text-muted);">Month Gaps</div>
+            </div>
+            <div class="card" style="padding:20px;text-align:center;">
+              <div style="font-size:28px;font-weight:700;" id="dq-balanced">--</div>
+              <div style="font-size:12px;color:var(--text-muted);">Trial Balance</div>
+            </div>
+          </div>
+
+          <!-- Data Issues -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><div class="card-title">Data Issues</div></div>
+            <div style="padding:16px;" id="dq-issues"></div>
+          </div>
+
+          <!-- Date Gaps -->
+          <div class="card" id="dq-gaps-card" style="margin-bottom:16px;display:none;">
+            <div class="card-header"><div class="card-title">Missing Months (No Entries)</div></div>
+            <div style="padding:16px;" id="dq-gaps-list"></div>
+          </div>
+
+          <!-- Monthly Activity Chart (text-based) -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><div class="card-title">Monthly Activity</div></div>
+            <div class="table-wrapper" style="max-height:400px;overflow-y:auto;">
+              <table class="data-table">
+                <thead><tr><th>Month</th><th class="text-right">Entries</th><th class="text-right">Total Debits</th><th>Activity</th></tr></thead>
+                <tbody id="dq-monthly-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Unbalanced Entries -->
+          <div class="card" id="dq-unbalanced-card" style="display:none;">
+            <div class="card-header"><div class="card-title">Unbalanced Entries</div></div>
+            <div class="table-wrapper" style="max-height:300px;overflow-y:auto;">
+              <table class="data-table">
+                <thead><tr><th>Entry #</th><th>Date</th><th>Description</th><th class="text-right">Debits</th><th class="text-right">Credits</th><th class="text-right">Difference</th></tr></thead>
+                <tbody id="dq-unbalanced-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Classification Fix Results -->
+          <div class="card" id="dq-fix-card" style="display:none;margin-top:16px;">
+            <div class="card-header"><div class="card-title">Classification Fixes Applied</div></div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead><tr><th>Account</th><th>Old Type</th><th>New Type</th></tr></thead>
+                <tbody id="dq-fix-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /main-content -->
   </div><!-- /app-body -->
 </div><!-- /app-wrapper -->
@@ -1269,6 +1359,7 @@
     else if (view === 'import') loadImportHistory();
     else if (view === 'fees') loadFeeHistory();
     else if (view === 'qbimport') {} // static view, no data load needed
+    else if (view === 'dataquality') runDataQuality();
   };
 
   /* ── Load all accounts (for dropdowns) ──────────────── */
@@ -2600,6 +2691,110 @@
       if (e.dataTransfer.files.length > 0) handleQBUpload(e.dataTransfer.files);
     });
   }
+
+  /* ── Data Quality Functions ────────────────────────── */
+  window.runDataQuality = async function() {
+    const loading = document.getElementById('dq-loading');
+    const results = document.getElementById('dq-results');
+    loading.style.display = 'block';
+    results.style.display = 'none';
+    try {
+      const data = await api('/api/qb/data-quality');
+      const d = data.data;
+
+      // Summary cards
+      document.getElementById('dq-total-entries').textContent = d.dateRange.totalEntries.toLocaleString();
+      if (d.dateRange.earliest && d.dateRange.latest) {
+        const from = new Date(d.dateRange.earliest).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        const to = new Date(d.dateRange.latest).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        document.getElementById('dq-date-range').innerHTML = `<span style="font-size:14px;">${from} - ${to}</span>`;
+      }
+      const gapEl = document.getElementById('dq-gap-count');
+      gapEl.textContent = d.dateGaps.length;
+      gapEl.style.color = d.dateGaps.length > 0 ? '#dc2626' : '#16a34a';
+
+      const balEl = document.getElementById('dq-balanced');
+      balEl.textContent = d.trialBalanceCheck.balanced ? 'Balanced' : 'Off by $' + d.trialBalanceCheck.difference.toFixed(2);
+      balEl.style.color = d.trialBalanceCheck.balanced ? '#16a34a' : '#dc2626';
+
+      // Data issues
+      const issuesHtml = [];
+      if (d.missingData.missingDate > 0) issuesHtml.push(`<div class="tag tag-red">${d.missingData.missingDate} entries missing dates</div>`);
+      if (d.missingData.missingDescription > 0) issuesHtml.push(`<div class="tag" style="background:#fef3c7;color:#92400e;">${d.missingData.missingDescription} entries missing descriptions</div>`);
+      if (d.singleLineEntries > 0) issuesHtml.push(`<div class="tag" style="background:#fef3c7;color:#92400e;">${d.singleLineEntries} entries with fewer than 2 line items</div>`);
+      if (d.unbalancedEntries.length > 0) issuesHtml.push(`<div class="tag tag-red">${d.unbalancedEntries.length} unbalanced entries</div>`);
+      if (issuesHtml.length === 0) issuesHtml.push(`<div class="tag tag-green">No data issues found</div>`);
+      document.getElementById('dq-issues').innerHTML = issuesHtml.join(' ');
+
+      // Date gaps
+      if (d.dateGaps.length > 0) {
+        document.getElementById('dq-gaps-card').style.display = 'block';
+        document.getElementById('dq-gaps-list').innerHTML = d.dateGaps.map(g => `<span class="tag tag-red" style="margin:2px;">${g}</span>`).join(' ');
+      } else {
+        document.getElementById('dq-gaps-card').style.display = 'none';
+      }
+
+      // Monthly activity
+      const maxEntries = Math.max(...d.monthlyActivity.map(m => parseInt(m.entry_count)));
+      document.getElementById('dq-monthly-tbody').innerHTML = d.monthlyActivity.map(m => {
+        const pct = Math.round((parseInt(m.entry_count) / maxEntries) * 100);
+        return `<tr>
+          <td>${m.month}</td>
+          <td class="text-right">${parseInt(m.entry_count).toLocaleString()}</td>
+          <td class="text-right">$${parseFloat(m.total_debits).toLocaleString(undefined,{minimumFractionDigits:2})}</td>
+          <td><div style="background:var(--accent);height:8px;border-radius:4px;width:${pct}%;min-width:2px;"></div></td>
+        </tr>`;
+      }).join('');
+
+      // Unbalanced entries
+      if (d.unbalancedEntries.length > 0) {
+        document.getElementById('dq-unbalanced-card').style.display = 'block';
+        document.getElementById('dq-unbalanced-tbody').innerHTML = d.unbalancedEntries.map(e => {
+          const diff = Math.abs(parseFloat(e.total_debits) - parseFloat(e.total_credits));
+          return `<tr>
+            <td>${e.entry_number}</td>
+            <td>${new Date(e.entry_date).toLocaleDateString()}</td>
+            <td>${(e.description || '').substring(0, 50)}</td>
+            <td class="text-right">$${parseFloat(e.total_debits).toFixed(2)}</td>
+            <td class="text-right">$${parseFloat(e.total_credits).toFixed(2)}</td>
+            <td class="text-right" style="color:#dc2626;">$${diff.toFixed(2)}</td>
+          </tr>`;
+        }).join('');
+      } else {
+        document.getElementById('dq-unbalanced-card').style.display = 'none';
+      }
+
+      loading.style.display = 'none';
+      results.style.display = 'block';
+    } catch (err) {
+      loading.style.display = 'none';
+      toast('Data quality check failed: ' + err.message, 'error');
+    }
+  };
+
+  window.fixClassifications = async function() {
+    if (!confirm('This will re-classify all accounts based on their names. Continue?')) return;
+    try {
+      const data = await api('/api/qb/fix-classifications', { method: 'POST' });
+      const fixes = data.data;
+      if (fixes.fixed === 0) {
+        toast('All accounts are correctly classified.', 'success');
+        return;
+      }
+      toast(`Fixed ${fixes.fixed} account classification(s)`, 'success');
+      const card = document.getElementById('dq-fix-card');
+      card.style.display = 'block';
+      document.getElementById('dq-fix-tbody').innerHTML = fixes.details.map(f => `<tr>
+        <td>${f.account}</td>
+        <td><span class="tag tag-red">${f.oldType}</span></td>
+        <td><span class="tag tag-green">${f.newType}</span></td>
+      </tr>`).join('');
+      // Re-run quality check
+      setTimeout(runDataQuality, 1000);
+    } catch (err) {
+      toast('Fix failed: ' + err.message, 'error');
+    }
+  };
 
   /* ── Modal Helpers ──────────────────────────────────── */
   function openModal(id) {

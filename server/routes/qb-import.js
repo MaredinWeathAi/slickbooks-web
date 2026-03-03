@@ -234,6 +234,153 @@ router.post('/qb/import', requireAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/qb/fix-classifications — Re-run account classifier to fix misclassified accounts
+ */
+router.post('/qb/fix-classifications', requireAuth, async (req, res) => {
+  try {
+    const accounts = await db.query('SELECT id, account_name, account_type, category, normal_balance FROM chart_of_accounts');
+    const fixes = [];
+
+    for (const acct of accounts) {
+      const correct = classifyAccount(acct.account_name);
+      if (acct.account_type !== correct.type || acct.normal_balance !== correct.normal) {
+        await db.query(
+          'UPDATE chart_of_accounts SET account_type = $1, category = $2, normal_balance = $3 WHERE id = $4',
+          [correct.type, correct.category, correct.normal, acct.id]
+        );
+        fixes.push({
+          account: acct.account_name,
+          oldType: acct.account_type,
+          newType: correct.type,
+          oldNormal: acct.normal_balance,
+          newNormal: correct.normal
+        });
+      }
+    }
+
+    res.json({ success: true, data: { fixed: fixes.length, details: fixes } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/qb/data-quality — Check data integrity and find gaps
+ */
+router.get('/qb/data-quality', requireAuth, async (req, res) => {
+  try {
+    // Date range and gap analysis
+    const dateRange = await db.queryOne(`
+      SELECT MIN(entry_date) as earliest, MAX(entry_date) as latest, COUNT(*) as total_entries
+      FROM journal_entries WHERE is_void = false
+    `);
+
+    // Monthly entry counts to find gaps
+    const monthlyData = await db.query(`
+      SELECT TO_CHAR(entry_date, 'YYYY-MM') as month,
+        COUNT(*) as entry_count,
+        COALESCE(SUM(li_agg.total_debit), 0) as total_debits
+      FROM journal_entries je
+      LEFT JOIN (
+        SELECT journal_entry_id, SUM(debit_amount) as total_debit
+        FROM line_items GROUP BY journal_entry_id
+      ) li_agg ON li_agg.journal_entry_id = je.id
+      WHERE je.is_void = false
+      GROUP BY TO_CHAR(entry_date, 'YYYY-MM')
+      ORDER BY month
+    `);
+
+    // Find months with no entries (gaps)
+    const gaps = [];
+    if (monthlyData.length > 1) {
+      for (let i = 1; i < monthlyData.length; i++) {
+        const prev = new Date(monthlyData[i - 1].month + '-01');
+        const curr = new Date(monthlyData[i].month + '-01');
+        const diffMonths = (curr.getFullYear() - prev.getFullYear()) * 12 + (curr.getMonth() - prev.getMonth());
+        if (diffMonths > 1) {
+          for (let m = 1; m < diffMonths; m++) {
+            const gapDate = new Date(prev);
+            gapDate.setMonth(gapDate.getMonth() + m);
+            gaps.push(gapDate.toISOString().substring(0, 7));
+          }
+        }
+      }
+    }
+
+    // Entries with missing data
+    const missingData = await db.queryOne(`
+      SELECT
+        COUNT(*) FILTER (WHERE description IS NULL OR description = '') as missing_description,
+        COUNT(*) FILTER (WHERE entry_date IS NULL) as missing_date,
+        COUNT(*) FILTER (WHERE memo IS NULL OR memo = '') as missing_memo
+      FROM journal_entries WHERE is_void = false
+    `);
+
+    // Unbalanced entries
+    const unbalanced = await db.query(`
+      SELECT je.id, je.entry_number, je.entry_date, je.description,
+        SUM(li.debit_amount) as total_debits, SUM(li.credit_amount) as total_credits
+      FROM journal_entries je
+      JOIN line_items li ON li.journal_entry_id = je.id
+      WHERE je.is_void = false
+      GROUP BY je.id
+      HAVING ABS(SUM(li.debit_amount) - SUM(li.credit_amount)) > 0.01
+      LIMIT 50
+    `);
+
+    // Entries with only 1 line item (should have at least 2 for double-entry)
+    const singleLine = await db.queryOne(`
+      SELECT COUNT(*) as cnt FROM journal_entries je
+      WHERE je.is_void = false AND (SELECT COUNT(*) FROM line_items WHERE journal_entry_id = je.id) < 2
+    `);
+
+    // Account classification summary
+    const accountSummary = await db.query(`
+      SELECT account_type, COUNT(*) as cnt FROM chart_of_accounts GROUP BY account_type ORDER BY account_type
+    `);
+
+    // Trial balance check
+    const trialBalance = await db.queryOne(`
+      SELECT
+        COALESCE(SUM(li.debit_amount), 0) as total_debits,
+        COALESCE(SUM(li.credit_amount), 0) as total_credits
+      FROM line_items li
+      JOIN journal_entries je ON li.journal_entry_id = je.id
+      WHERE je.is_void = false AND je.is_posted = true
+    `);
+
+    res.json({
+      success: true,
+      data: {
+        dateRange: {
+          earliest: dateRange.earliest,
+          latest: dateRange.latest,
+          totalEntries: parseInt(dateRange.total_entries)
+        },
+        monthlyActivity: monthlyData,
+        dateGaps: gaps,
+        missingData: {
+          missingDescription: parseInt(missingData.missing_description),
+          missingDate: parseInt(missingData.missing_date),
+          missingMemo: parseInt(missingData.missing_memo)
+        },
+        unbalancedEntries: unbalanced,
+        singleLineEntries: parseInt(singleLine.cnt),
+        accountSummary,
+        trialBalanceCheck: {
+          totalDebits: parseFloat(trialBalance.total_debits),
+          totalCredits: parseFloat(trialBalance.total_credits),
+          difference: Math.abs(parseFloat(trialBalance.total_debits) - parseFloat(trialBalance.total_credits)),
+          balanced: Math.abs(parseFloat(trialBalance.total_debits) - parseFloat(trialBalance.total_credits)) < 0.02
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * DELETE /api/qb/clear — Clear all imported data (for re-import)
  */
 router.delete('/qb/clear', requireAuth, async (req, res) => {
