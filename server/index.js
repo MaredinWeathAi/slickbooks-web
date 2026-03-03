@@ -98,23 +98,25 @@ app.use('/api', reconciliationRoutes);
 
 // Temporary diagnostic endpoint (will be removed after analysis)
 app.get('/api/diag/revenue-check', async (req, res) => {
-  const p = getPool();
-  if (!p) return res.status(500).json({ error: 'no pool' });
+  const { Pool: DiagPool } = require('pg');
+  const diagPool = new DiagPool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 1, connectionTimeoutMillis: 8000, idleTimeoutMillis: 5000 });
   try {
     const step = req.query.step || '1';
     let result;
-
     if (step === '1') {
-      result = await p.query(`SELECT id, account_name, is_active FROM chart_of_accounts WHERE account_type = 'REVENUE' ORDER BY id`);
+      result = await diagPool.query(`SELECT id, account_name, is_active FROM chart_of_accounts WHERE account_type = 'REVENUE' ORDER BY id`);
     } else if (step === '2') {
-      result = await p.query(`SELECT je.id, je.entry_date::text, je.description, li.debit_amount, li.credit_amount, coa.account_name FROM journal_entries je JOIN line_items li ON li.journal_entry_id = je.id JOIN chart_of_accounts coa ON coa.id = li.account_id WHERE coa.account_type = 'REVENUE' AND je.entry_date >= '2025-01-01' AND je.entry_date <= '2025-04-30' AND je.is_void = false ORDER BY je.entry_date`);
+      result = await diagPool.query(`SELECT je.id, je.entry_date::text, je.description, li.debit_amount, li.credit_amount, coa.account_name FROM journal_entries je JOIN line_items li ON li.journal_entry_id = je.id JOIN chart_of_accounts coa ON coa.id = li.account_id WHERE coa.account_type = 'REVENUE' AND je.entry_date >= '2025-01-01' AND je.entry_date <= '2025-04-30' AND je.is_void = false ORDER BY je.entry_date`);
     } else if (step === '3') {
-      result = await p.query(`SELECT je.id, je.entry_date::text, je.description, li.debit_amount, coa.account_name FROM journal_entries je JOIN line_items li ON li.journal_entry_id = je.id JOIN chart_of_accounts coa ON coa.id = li.account_id WHERE coa.account_type = 'ASSET' AND li.debit_amount > 0 AND je.entry_date >= '2025-01-01' AND je.entry_date <= '2025-04-30' AND je.is_void = false ORDER BY je.entry_date LIMIT 100`);
+      result = await diagPool.query(`SELECT je.id, je.entry_date::text, je.description, li.debit_amount, coa.account_name FROM journal_entries je JOIN line_items li ON li.journal_entry_id = je.id JOIN chart_of_accounts coa ON coa.id = li.account_id WHERE coa.account_type = 'ASSET' AND li.debit_amount > 0 AND je.entry_date >= '2025-01-01' AND je.entry_date <= '2025-04-30' AND je.is_void = false ORDER BY je.entry_date LIMIT 100`);
     } else {
+      await diagPool.end();
       return res.json({ error: 'use ?step=1, 2, or 3' });
     }
+    await diagPool.end();
     res.json(result.rows);
   } catch (err) {
+    try { await diagPool.end(); } catch(e) {}
     res.status(500).json({ error: err.message });
   }
 });
