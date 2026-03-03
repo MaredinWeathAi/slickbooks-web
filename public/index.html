@@ -524,6 +524,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           Search Ledger
         </div>
+        <div class="nav-link" onclick="switchView('reconciliation')" data-view="reconciliation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Reconciliation
+        </div>
       </div>
 
       <div class="nav-section">
@@ -538,11 +542,7 @@
         <div class="nav-section-title">Banking</div>
         <div class="nav-link" onclick="switchView('import')" data-view="import">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-          Bank & CC Statements
-        </div>
-        <div class="nav-link" onclick="switchView('reconciliation')" data-view="reconciliation">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Reconciliation
+          Bank Statements
         </div>
         <div class="nav-link" onclick="switchView('fees')" data-view="fees">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
@@ -767,6 +767,7 @@
           <button class="btn" id="report-btn-bs" onclick="selectReport('bs')">Balance Sheet</button>
           <button class="btn" id="report-btn-tb" onclick="selectReport('tb')">Trial Balance</button>
           <button class="btn" id="report-btn-txn" onclick="selectReport('txn')">Transaction Detail</button>
+          <button class="btn" id="report-btn-flofr" onclick="selectReport('flofr')">FLOFR Statements</button>
         </div>
 
         <div class="filter-bar" id="report-filters">
@@ -806,121 +807,75 @@
         </div>
       </div>
 
-      <!-- ═══════ BANK & CC IMPORT VIEW ═══════ -->
+      <!-- ═══════ BANK STATEMENTS IMPORT VIEW ═══════ -->
       <div class="view" id="import-view">
         <div class="page-header">
           <div>
-            <div class="page-title">Bank & CC Statements</div>
-            <div class="page-subtitle">Upload bank and credit card statements to create journal entries</div>
+            <div class="page-title">Bank Statements</div>
+            <div class="page-subtitle">Upload bank or credit card statements — the system auto-detects the file type</div>
           </div>
         </div>
 
         <div class="card">
+          <div class="dropzone" id="import-dropzone" onclick="document.getElementById('import-file-input').click()">
+            <div class="dropzone-icon">📄</div>
+            <div class="dropzone-text">Drop bank or credit card statement files here or click to browse</div>
+            <div class="dropzone-hint">Supports PDF, CSV, TXT — Bank of America bank & CC statements, Chase, Interactive Brokers</div>
+          </div>
+          <input type="file" id="import-file-input" accept=".pdf,.csv,.txt,.tsv" multiple style="display:none" onchange="handleSmartImportUpload(this.files)">
+        </div>
+
+        <!-- Bank Statement Results -->
+        <div id="import-results" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Parsed Bank Transactions</div>
+              <div class="btn-group">
+                <select id="import-bank-account" class="form-select" style="width:auto;"></select>
+                <button class="btn btn-success" onclick="importToLedger()">Import to Ledger</button>
+              </div>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr><th><input type="checkbox" id="import-select-all" onchange="toggleAllImportRows(this.checked)"></th><th>Date</th><th>Description</th><th>Type</th><th class="text-right">Amount</th></tr>
+                </thead>
+                <tbody id="import-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- CC Statement Results -->
+        <div id="cc-import-results" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Parsed CC Transactions with Account Mapping</div>
+              <button class="btn btn-success" onclick="importCCToLedger()">Import to Ledger</button>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Date</th><th>Description</th><th class="text-right">Amount</th><th>Suggested Account</th><th>Map to Account</th></tr>
+                </thead>
+                <tbody id="cc-import-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Import History -->
+        <div class="card">
           <div class="card-header">
-            <div class="card-title">Import Type</div>
+            <div class="card-title">Import History</div>
           </div>
-          <div style="padding:16px;">
-            <div style="display:flex;gap:12px;margin-bottom:16px;">
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;">
-                <input type="radio" name="import-type" value="bank" checked onchange="switchImportType('bank')">
-                <span style="font-weight:500;">Bank Statement</span>
-                <span style="font-size:12px;color:var(--text-muted);">(PDF, CSV, TXT)</span>
-              </label>
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;">
-                <input type="radio" name="import-type" value="cc" onchange="switchImportType('cc')">
-                <span style="font-weight:500;">Credit Card Statement</span>
-                <span style="font-size:12px;color:var(--text-muted);">(CSV - Bank of America)</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bank Statement Upload -->
-        <div id="bank-import-section">
-          <div class="card">
-            <div class="dropzone" id="import-dropzone" onclick="document.getElementById('import-file-input').click()">
-              <div class="dropzone-icon">📄</div>
-              <div class="dropzone-text">Drop bank statement files here or click to browse</div>
-              <div class="dropzone-hint">Supports PDF, CSV, TXT (Bank of America, Chase, Interactive Brokers)</div>
-            </div>
-            <input type="file" id="import-file-input" accept=".pdf,.csv,.txt,.tsv" multiple style="display:none" onchange="handleImportUpload(this.files)">
-          </div>
-
-          <div id="import-results" style="display:none;">
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">Parsed Transactions</div>
-                <div class="btn-group">
-                  <select id="import-bank-account" class="form-select" style="width:auto;"></select>
-                  <button class="btn btn-success" onclick="importToLedger()">Import to Ledger</button>
-                </div>
-              </div>
-              <div class="table-wrapper">
-                <table class="data-table">
-                  <thead>
-                    <tr><th><input type="checkbox" id="import-select-all" onchange="toggleAllImportRows(this.checked)"></th><th>Date</th><th>Description</th><th>Type</th><th class="text-right">Amount</th></tr>
-                  </thead>
-                  <tbody id="import-tbody"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Bank Import History</div>
-            </div>
-            <div class="table-wrapper">
-              <table class="data-table">
-                <thead>
-                  <tr><th>Date</th><th>File</th><th>Bank</th><th>Transactions</th><th>Status</th></tr>
-                </thead>
-                <tbody id="import-history-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- CC Statement Upload -->
-        <div id="cc-import-section" style="display:none;">
-          <div class="card">
-            <div class="dropzone" id="cc-dropzone" onclick="document.getElementById('cc-file-input').click()">
-              <div class="dropzone-icon">💳</div>
-              <div class="dropzone-text">Drop credit card statement files here or click to browse</div>
-              <div class="dropzone-hint">Supports CSV format from Bank of America</div>
-            </div>
-            <input type="file" id="cc-file-input" accept=".csv,.txt" multiple style="display:none" onchange="handleCCImportUpload(this.files)">
-          </div>
-
-          <div id="cc-import-results" style="display:none;">
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">Parsed CC Transactions with Account Mapping</div>
-                <button class="btn btn-success" onclick="importCCToLedger()">Import to Ledger</button>
-              </div>
-              <div class="table-wrapper">
-                <table class="data-table">
-                  <thead>
-                    <tr><th>Date</th><th>Description</th><th class="text-right">Amount</th><th>Suggested Account</th><th>Map to Account</th></tr>
-                  </thead>
-                  <tbody id="cc-import-tbody"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">CC Import History</div>
-            </div>
-            <div class="table-wrapper">
-              <table class="data-table">
-                <thead>
-                  <tr><th>Date</th><th>File</th><th>Transactions</th><th>Status</th></tr>
-                </thead>
-                <tbody id="cc-history-tbody"></tbody>
-              </table>
-            </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr><th>Date</th><th>File</th><th>Type</th><th>Transactions</th><th>Status</th></tr>
+              </thead>
+              <tbody id="import-history-tbody"></tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -1107,10 +1062,10 @@
         </div>
 
         <!-- ── Learned Rules Modal ── -->
-        <div id="rules-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;">
-          <div style="background:var(--bg-primary);border-radius:12px;width:700px;max-height:80vh;overflow:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div id="rules-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+          <div style="background:var(--bg-card);border-radius:12px;width:700px;max-height:80vh;overflow:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-              <h3 style="margin:0;color:var(--text-primary);">Learned Category Rules</h3>
+              <h3 style="margin:0;color:var(--text);">Learned Category Rules</h3>
               <button class="btn btn-sm" onclick="document.getElementById('rules-modal').style.display='none'">Close</button>
             </div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
@@ -1128,7 +1083,7 @@
         <!-- Recent Imports -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Recent Bank & CC Imports</div>
+            <div class="card-title">Recent Imports</div>
           </div>
           <div class="table-wrapper">
             <table class="data-table">
@@ -2498,7 +2453,7 @@
     const acctLabel = document.getElementById('report-account-label');
     const acctSelect = document.getElementById('report-account-select');
 
-    if (type === 'pnl' || type === 'txn') {
+    if (type === 'pnl' || type === 'txn' || type === 'flofr') {
       fromLabel.textContent = 'From:'; toLabel.textContent = 'To:';
       fromLabel.style.display = ''; toLabel.style.display = '';
       fromInput.style.display = ''; toInput.style.display = '';
@@ -2560,6 +2515,14 @@
         if (accountId) url += `accountId=${accountId}&`;
         data = await api(url);
         renderTransactionDetail(data.data);
+      } else if (type === 'flofr') {
+        const from = document.getElementById('report-date-from').value;
+        const to = document.getElementById('report-date-to').value;
+        let url = '/api/reports/flofr?';
+        if (from) url += `startDate=${from}&`;
+        if (to) url += `endDate=${to}&`;
+        data = await api(url);
+        renderFLOFRStatements(data.data);
       }
       // Show print/PDF buttons after successful generation
       document.getElementById('report-actions').style.display = '';
@@ -2771,6 +2734,130 @@
     output.innerHTML = html;
   }
 
+  /* ── FLOFR Financial Statements Renderer ─────────────── */
+  function renderFLOFRStatements(d) {
+    const output = document.getElementById('report-output');
+    const period = d.period;
+    const inc = d.statementOfIncome;
+    const bs = d.statementOfFinancialCondition;
+
+    const fmtPeriod = period.startDate && period.endDate
+      ? `${fmtDate(period.startDate)} through ${fmtDate(period.endDate)}`
+      : `Year Ended December 31, ${period.year}`;
+
+    // Build expense rows grouped by category
+    const categories = inc.expenses.categories || {};
+    let expenseRows = '';
+    const sortedCats = Object.entries(categories).sort((a, b) => b[1].total - a[1].total);
+    for (const [catName, catData] of sortedCats) {
+      if (catData.accounts.length === 1) {
+        // Single account in category — show as single row
+        expenseRows += `<tr><td style="padding-left:24px;">${escHtml(catData.accounts[0].account_name)}</td><td class="amount text-right">${fmtCurrency(catData.total)}</td></tr>`;
+      } else {
+        // Multiple accounts — show category header + details
+        for (const a of catData.accounts) {
+          expenseRows += `<tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>`;
+        }
+      }
+    }
+
+    output.innerHTML = `
+      <div id="flofr-report-content">
+        <!-- ═══ STATEMENT OF INCOME ═══ -->
+        <div style="text-align:center;margin-bottom:8px;">
+          <div style="font-size:16px;font-weight:700;">MAREDIN CORPORATION</div>
+          <div style="font-size:11px;color:var(--text-muted);">d/b/a Maredin Wealth Advisors</div>
+        </div>
+        <h3 style="text-align:center;margin-bottom:4px;font-size:15px;">Statement of Income</h3>
+        <div style="text-align:center;color:var(--text-muted);font-size:13px;margin-bottom:24px;">${fmtPeriod}</div>
+
+        <table class="data-table" style="margin-bottom:8px;">
+          <thead><tr><th>Description</th><th class="text-right" style="width:140px;">Amount</th></tr></thead>
+          <tbody>
+            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">REVENUE</td></tr>
+            ${inc.revenue.accounts.map(a => `
+              <tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
+            `).join('')}
+            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Revenue</strong></td><td class="amount text-right"><strong>${fmtCurrency(inc.revenue.total)}</strong></td></tr>
+
+            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">EXPENSES</td></tr>
+            ${expenseRows}
+            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Expenses</strong></td><td class="amount text-right"><strong>${fmtCurrency(inc.expenses.total)}</strong></td></tr>
+
+            <tr class="report-grand-total">
+              <td><strong>NET INCOME</strong></td>
+              <td class="amount text-right ${inc.netIncome >= 0 ? 'text-success' : 'text-danger'}"><strong>${fmtCurrency(inc.netIncome)}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="height:40px;"></div>
+
+        <!-- ═══ STATEMENT OF FINANCIAL CONDITION (BALANCE SHEET) ═══ -->
+        <div style="text-align:center;margin-bottom:8px;">
+          <div style="font-size:16px;font-weight:700;">MAREDIN CORPORATION</div>
+          <div style="font-size:11px;color:var(--text-muted);">d/b/a Maredin Wealth Advisors</div>
+        </div>
+        <h3 style="text-align:center;margin-bottom:4px;font-size:15px;">Statement of Financial Condition</h3>
+        <div style="text-align:center;color:var(--text-muted);font-size:13px;margin-bottom:24px;">As of ${fmtDate(period.endDate)}</div>
+
+        <table class="data-table">
+          <thead><tr><th>Description</th><th class="text-right" style="width:140px;">Amount</th></tr></thead>
+          <tbody>
+            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">ASSETS</td></tr>
+            ${bs.assets.accounts.map(a => `
+              <tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
+            `).join('')}
+            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Assets</strong></td><td class="amount text-right"><strong>${fmtCurrency(bs.assets.total)}</strong></td></tr>
+
+            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">LIABILITIES</td></tr>
+            ${bs.liabilities.accounts.length > 0 ? bs.liabilities.accounts.map(a => `
+              <tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
+            `).join('') : '<tr><td style="padding-left:24px;color:var(--text-muted);">None</td><td class="amount text-right">$0.00</td></tr>'}
+            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Liabilities</strong></td><td class="amount text-right"><strong>${fmtCurrency(bs.liabilities.total)}</strong></td></tr>
+
+            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">STOCKHOLDERS' EQUITY</td></tr>
+            ${bs.equity.accounts.map(a => `
+              <tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
+            `).join('')}
+            <tr><td style="padding-left:24px;"><em>Current Year Earnings</em></td><td class="amount text-right"><em>${fmtCurrency(bs.equity.currentEarnings)}</em></td></tr>
+            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Stockholders' Equity</strong></td><td class="amount text-right"><strong>${fmtCurrency(bs.equity.totalWithEarnings)}</strong></td></tr>
+
+            <tr class="report-grand-total">
+              <td><strong>TOTAL LIABILITIES & STOCKHOLDERS' EQUITY</strong></td>
+              <td class="amount text-right"><strong>${fmtCurrency(bs.totalLiabilitiesAndEquity)}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="height:40px;"></div>
+
+        <!-- ═══ AFFIRMATION ═══ -->
+        <div style="text-align:center;margin-bottom:8px;">
+          <div style="font-size:16px;font-weight:700;">MAREDIN CORPORATION</div>
+          <div style="font-size:11px;color:var(--text-muted);">d/b/a Maredin Wealth Advisors</div>
+        </div>
+        <h3 style="text-align:center;margin-bottom:24px;font-size:15px;">Affirmation</h3>
+
+        <div style="max-width:600px;margin:0 auto;font-size:13px;line-height:1.8;padding:0 20px;">
+          <p>The undersigned, being duly authorized, hereby affirms that the attached financial statements of
+          <strong>Maredin Corporation d/b/a Maredin Wealth Advisors</strong> as of <strong>${fmtDate(period.endDate)}</strong>
+          and for the period then ended, are true, correct and complete to the best of my knowledge and belief.</p>
+
+          <div style="margin-top:48px;">
+            <div style="border-bottom:1px solid var(--text);width:300px;margin-bottom:4px;"></div>
+            <div style="font-weight:600;">Marcelo Zinn, President</div>
+            <div style="color:var(--text-muted);font-size:12px;">Maredin Corporation</div>
+          </div>
+
+          <div style="margin-top:32px;">
+            <div style="color:var(--text-muted);font-size:12px;">Date: ____________________</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   /* ── Quick Date Range Helper ─────────────────────────── */
   window.applyQuickRange = function(selectId, fromId, toId) {
     const select = document.getElementById(selectId);
@@ -2865,39 +2952,8 @@
 
   /* ── Bank Import ────────────────────────────────────── */
   window.handleImportUpload = async function(files) {
-    if (!files || files.length === 0) return;
-    const formData = new FormData();
-    for (let f of files) formData.append('files', f);
-
-    try {
-      const resp = await fetch('/api/import/upload', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Upload failed');
-
-      // Collect all transactions
-      let allTxns = [];
-      (data.files || []).forEach(f => {
-        if (f.success && f.transactions) {
-          allTxns.push(...f.transactions);
-        }
-      });
-
-      if (allTxns.length === 0) {
-        toast('No transactions found in uploaded files', 'error');
-        return;
-      }
-
-      state.importTransactions = allTxns;
-      renderImportResults();
-      toast(`Parsed ${allTxns.length} transactions`, 'success');
-    } catch (err) {
-      toast('Import failed: ' + err.message, 'error');
-    }
-    document.getElementById('import-file-input').value = '';
+    // Legacy - now handled by handleSmartImportUpload auto-detect
+    return handleSmartImportUpload(files);
   };
 
   function renderImportResults() {
@@ -2973,15 +3029,19 @@
         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:20px;">No import history</td></tr>';
         return;
       }
-      tbody.innerHTML = history.map(h => `
-        <tr>
-          <td>${fmtDate(h.import_date || h.created_at)}</td>
-          <td>${escHtml(h.file_name || '')}</td>
-          <td>${escHtml(h.bank || '')}</td>
-          <td>${h.transaction_count}</td>
-          <td><span class="tag ${h.status === 'imported' ? 'tag-green' : 'tag-yellow'}">${escHtml(h.status)}</span></td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = history.map(h => {
+        const meta = h.metadata ? (typeof h.metadata === 'string' ? JSON.parse(h.metadata) : h.metadata) : {};
+        const isCC = meta.import_type === 'cc';
+        return `
+          <tr>
+            <td>${fmtDate(h.import_date || h.created_at)}</td>
+            <td>${escHtml(h.file_name || '')}</td>
+            <td><span class="tag ${isCC ? 'tag-purple' : 'tag-blue'}">${isCC ? 'CC' : 'Bank'}</span></td>
+            <td>${h.transaction_count}</td>
+            <td><span class="tag ${h.status === 'imported' ? 'tag-green' : 'tag-yellow'}">${escHtml(h.status)}</span></td>
+          </tr>
+        `;
+      }).join('');
     } catch (err) {
       console.error('Failed to load import history:', err);
     }
@@ -3177,7 +3237,7 @@
       dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
     });
     dropzone.addEventListener('drop', e => {
-      if (e.dataTransfer.files.length > 0) handleImportUpload(e.dataTransfer.files);
+      if (e.dataTransfer.files.length > 0) handleSmartImportUpload(e.dataTransfer.files);
     });
   }
 
@@ -3343,25 +3403,67 @@
     });
   }
 
-  /* ── Bank & CC Import Functions ────────────────────── */
-  window.switchImportType = function(type) {
-    const bankSection = document.getElementById('bank-import-section');
-    const ccSection = document.getElementById('cc-import-section');
-    if (type === 'bank') {
-      bankSection.style.display = '';
-      ccSection.style.display = 'none';
-    } else {
-      bankSection.style.display = 'none';
-      ccSection.style.display = '';
-      loadCCImportHistory();
+  /* ── Bank & CC Import Functions (Auto-Detect) ────────── */
+  // Auto-detect file type: CC CSV has "CardHolder Name" or "Posted Date" headers
+  window.handleSmartImportUpload = async function(files) {
+    if (!files || files.length === 0) return;
+
+    // Check if any CSV files look like CC statements
+    const bankFiles = [];
+    const ccFiles = [];
+
+    for (const f of files) {
+      if (f.name.toLowerCase().endsWith('.csv') || f.name.toLowerCase().endsWith('.txt')) {
+        // Read first few lines to detect type
+        const text = await f.text();
+        const firstLine = text.split('\n')[0].toLowerCase();
+        if (firstLine.includes('cardholder') || firstLine.includes('posted date') || firstLine.includes('reference number')) {
+          ccFiles.push(f);
+        } else {
+          bankFiles.push(f);
+        }
+      } else {
+        // PDFs and other files go to bank import
+        bankFiles.push(f);
+      }
     }
+
+    // Process bank files
+    if (bankFiles.length > 0) {
+      const bankFormData = new FormData();
+      for (let f of bankFiles) bankFormData.append('files', f);
+      await processBankUpload(bankFormData);
+    }
+
+    // Process CC files
+    if (ccFiles.length > 0) {
+      const ccFormData = new FormData();
+      for (let f of ccFiles) ccFormData.append('files', f);
+      await processCCUpload(ccFormData);
+    }
+
+    document.getElementById('import-file-input').value = '';
   };
 
-  window.handleCCImportUpload = async function(files) {
-    if (!files || files.length === 0) return;
-    const formData = new FormData();
-    for (let f of files) formData.append('files', f);
+  async function processBankUpload(formData) {
+    try {
+      const resp = await fetch('/api/import/upload', { method: 'POST', body: formData, credentials: 'include' });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Upload failed');
 
+      let allTxns = [];
+      (data.files || []).forEach(f => { if (f.success && f.transactions) allTxns.push(...f.transactions); });
+      if (allTxns.length === 0) { toast('No bank transactions found in uploaded files', 'error'); return; }
+
+      state.importTransactions = allTxns;
+      renderImportResults();
+      toast('Parsed ' + allTxns.length + ' bank transactions', 'success');
+    } catch (err) {
+      toast('Bank import failed: ' + err.message, 'error');
+    }
+  }
+
+  async function processCCUpload(formData) {
     try {
       toast('Parsing credit card statements...', 'info');
       const resp = await fetch('/api/cc-import/upload', { method: 'POST', body: formData, credentials: 'include' });
@@ -3374,15 +3476,22 @@
           state.parsedCCTransactions = parseResult.transactions || [];
           renderCCImportPreview();
           document.getElementById('cc-import-results').style.display = '';
-          toast('Credit card statement parsed successfully (' + parseResult.transactions.length + ' transactions)', 'success');
+          toast('Credit card statement detected & parsed (' + parseResult.transactions.length + ' transactions)', 'success');
         } else {
-          toast('Parse failed: ' + (parseResult.error || 'Unknown error'), 'error');
+          toast('CC parse failed: ' + (parseResult.error || 'Unknown error'), 'error');
         }
       }
     } catch (err) {
-      toast('CC import upload failed: ' + err.message, 'error');
+      toast('CC import failed: ' + err.message, 'error');
     }
-    document.getElementById('cc-file-input').value = '';
+  }
+
+  window.handleCCImportUpload = async function(files) {
+    // Legacy - now handled by handleSmartImportUpload auto-detect
+    if (!files || files.length === 0) return;
+    const formData = new FormData();
+    for (let f of files) formData.append('files', f);
+    await processCCUpload(formData);
   };
 
   function renderCCImportPreview() {
@@ -3501,19 +3610,7 @@
     }
   }
 
-  /* Drag & Drop for CC Import */
-  const ccDropzone = document.getElementById('cc-dropzone');
-  if (ccDropzone) {
-    ['dragenter', 'dragover'].forEach(evt => {
-      ccDropzone.addEventListener(evt, e => { e.preventDefault(); ccDropzone.classList.add('dragover'); });
-    });
-    ['dragleave', 'drop'].forEach(evt => {
-      ccDropzone.addEventListener(evt, e => { e.preventDefault(); ccDropzone.classList.remove('dragover'); });
-    });
-    ccDropzone.addEventListener('drop', e => {
-      if (e.dataTransfer.files.length > 0) handleCCImportUpload(e.dataTransfer.files);
-    });
-  }
+  /* Drag & Drop — unified dropzone handles both bank & CC */
 
   /* ── Reconciliation Functions ────────────────────────── */
   window.runReconciliation = async function() {
@@ -3710,13 +3807,13 @@
 
       await api('/api/reconciliation/categorize', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           lineItemId,
           newAccountId: parseInt(newAccountId),
           learnRule: learnCheckbox ? learnCheckbox.checked : false,
           matchPattern,
           matchType: 'contains'
-        })
+        }
       });
 
       // Animate row removal

@@ -341,4 +341,77 @@ router.get('/reports/analytics', requireAuth, async (req, res) => {
   }
 });
 
+// FLOFR Financial Statements (Florida Office of Financial Regulation)
+// Statement of Income + Statement of Financial Condition (Balance Sheet)
+router.get('/reports/flofr', requireAuth, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    // Default to fiscal year if not provided
+    const now = new Date();
+    const year = startDate ? startDate.substring(0, 4) : String(now.getFullYear());
+    const start = startDate || `${year}-01-01`;
+    const end = endDate || `${year}-12-31`;
+
+    // ─── Statement of Income (P&L) ───
+    const revenue = await getAccountTotals('REVENUE', start, end);
+    const expenses = await getAccountTotals('EXPENSE', start, end);
+
+    const totalRevenue = Math.round(revenue.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const totalExpenses = Math.round(expenses.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const netIncome = Math.round((totalRevenue - totalExpenses) * 100) / 100;
+
+    // Group expenses by category/sub_category for FLOFR format
+    const expenseCategories = {};
+    for (const exp of expenses) {
+      const cat = exp.category || exp.account_name || 'Other Expenses';
+      if (!expenseCategories[cat]) expenseCategories[cat] = { accounts: [], total: 0 };
+      expenseCategories[cat].accounts.push(exp);
+      expenseCategories[cat].total += exp.balance;
+    }
+
+    // Round category totals
+    for (const cat of Object.keys(expenseCategories)) {
+      expenseCategories[cat].total = Math.round(expenseCategories[cat].total * 100) / 100;
+    }
+
+    // ─── Statement of Financial Condition (Balance Sheet) ───
+    const assets = await getAccountBalances('ASSET', end);
+    const liabilities = await getAccountBalances('LIABILITY', end);
+    const equity = await getAccountBalances('EQUITY', end);
+
+    // Current earnings
+    const currentEarnings = netIncome;
+
+    const totalAssets = Math.round(assets.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const totalLiabilities = Math.round(liabilities.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const totalEquity = Math.round(equity.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+
+    res.json({
+      success: true,
+      data: {
+        reportType: 'flofr',
+        period: { startDate: start, endDate: end, year },
+        statementOfIncome: {
+          revenue: { accounts: revenue, total: totalRevenue },
+          expenses: { accounts: expenses, total: totalExpenses, categories: expenseCategories },
+          netIncome
+        },
+        statementOfFinancialCondition: {
+          assets: { accounts: assets, total: totalAssets },
+          liabilities: { accounts: liabilities, total: totalLiabilities },
+          equity: {
+            accounts: equity,
+            total: totalEquity,
+            currentEarnings,
+            totalWithEarnings: Math.round((totalEquity + currentEarnings) * 100) / 100
+          },
+          totalLiabilitiesAndEquity: Math.round((totalLiabilities + totalEquity + currentEarnings) * 100) / 100
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
