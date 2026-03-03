@@ -527,6 +527,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
           Fee Import
         </div>
+        <div class="nav-link" onclick="switchView('qbimport')" data-view="qbimport">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9,15 12,12 15,15"/></svg>
+          QB Import
+        </div>
       </div>
     </nav>
 
@@ -853,6 +857,95 @@
         </div>
       </div>
 
+      <!-- ═══════ QB IMPORT VIEW ═══════ -->
+      <div class="view" id="qbimport-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">QuickBooks Import</div>
+            <div class="page-subtitle">Upload your QuickBooks export files to import historical data</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="dropzone" id="qb-dropzone" onclick="document.getElementById('qb-file-input').click()">
+            <div class="dropzone-icon">📊</div>
+            <div class="dropzone-text">Drop QuickBooks Excel export files here or click to browse</div>
+            <div class="dropzone-hint">Upload: Trial_balance.xlsx, Journal.xlsx, Vendors.xlsx, Customers.xlsx</div>
+          </div>
+          <input type="file" id="qb-file-input" accept=".xlsx,.xls,.csv" multiple style="display:none" onchange="handleQBUpload(this.files)">
+        </div>
+
+        <!-- Parse Results -->
+        <div id="qb-results" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">QuickBooks Data Summary</div>
+                <div style="font-size:12px;color:var(--text-muted);" id="qb-summary-text"></div>
+              </div>
+              <div class="btn-group">
+                <button class="btn btn-danger" onclick="clearQBData()" style="margin-right:8px;">Clear Existing Data</button>
+                <button class="btn btn-success" onclick="executeQBImport()">Import All Data</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Accounts Preview -->
+          <div class="card" id="qb-accounts-card" style="display:none;">
+            <div class="card-header">
+              <div class="card-title" id="qb-accounts-title">Chart of Accounts</div>
+            </div>
+            <div class="table-wrapper" style="max-height:300px;overflow-y:auto;">
+              <table class="data-table">
+                <thead><tr><th>#</th><th>Account Name</th><th>Type</th><th>Category</th><th class="text-right">Debit</th><th class="text-right">Credit</th></tr></thead>
+                <tbody id="qb-accounts-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Journal Entries Preview -->
+          <div class="card" id="qb-entries-card" style="display:none;">
+            <div class="card-header">
+              <div class="card-title" id="qb-entries-title">Journal Entries</div>
+            </div>
+            <div class="table-wrapper" style="max-height:300px;overflow-y:auto;">
+              <table class="data-table">
+                <thead><tr><th>Entry #</th><th>Date</th><th>Type</th><th>Description</th><th>Lines</th></tr></thead>
+                <tbody id="qb-entries-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Vendors/Customers Preview -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="card" id="qb-vendors-card" style="display:none;">
+              <div class="card-header"><div class="card-title" id="qb-vendors-title">Vendors</div></div>
+              <div class="table-wrapper" style="max-height:200px;overflow-y:auto;">
+                <table class="data-table"><thead><tr><th>Name</th></tr></thead><tbody id="qb-vendors-tbody"></tbody></table>
+              </div>
+            </div>
+            <div class="card" id="qb-customers-card" style="display:none;">
+              <div class="card-header"><div class="card-title" id="qb-customers-title">Customers</div></div>
+              <div class="table-wrapper" style="max-height:200px;overflow-y:auto;">
+                <table class="data-table"><thead><tr><th>Name</th></tr></thead><tbody id="qb-customers-tbody"></tbody></table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Import Progress -->
+        <div class="card" id="qb-progress-card" style="display:none;">
+          <div class="card-header"><div class="card-title">Import Progress</div></div>
+          <div style="padding:16px;">
+            <div id="qb-progress-text" style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;">Starting import...</div>
+            <div style="background:var(--border);border-radius:8px;height:24px;overflow:hidden;">
+              <div id="qb-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s;border-radius:8px;"></div>
+            </div>
+            <div id="qb-progress-details" style="margin-top:12px;font-size:12px;color:var(--text-muted);"></div>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /main-content -->
   </div><!-- /app-body -->
 </div><!-- /app-wrapper -->
@@ -1175,6 +1268,7 @@
     else if (view === 'journal') loadJournalEntries();
     else if (view === 'import') loadImportHistory();
     else if (view === 'fees') loadFeeHistory();
+    else if (view === 'qbimport') {} // static view, no data load needed
   };
 
   /* ── Load all accounts (for dropdowns) ──────────────── */
@@ -2342,6 +2436,168 @@
     });
     dropzone.addEventListener('drop', e => {
       if (e.dataTransfer.files.length > 0) handleImportUpload(e.dataTransfer.files);
+    });
+  }
+
+  /* ── QuickBooks Import ──────────────────────────────── */
+  state.qbData = null;
+
+  window.handleQBUpload = async function(files) {
+    if (!files || files.length === 0) return;
+    const formData = new FormData();
+    for (let f of files) formData.append('files', f);
+
+    try {
+      toast('Parsing QuickBooks files...', 'info');
+      const resp = await fetch('/api/qb/parse', { method: 'POST', body: formData, credentials: 'include' });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Upload failed');
+
+      state.qbData = data.data;
+      renderQBResults();
+      toast('QuickBooks data parsed successfully', 'success');
+    } catch (err) {
+      toast('QB parse failed: ' + err.message, 'error');
+    }
+    document.getElementById('qb-file-input').value = '';
+  };
+
+  function renderQBResults() {
+    const d = state.qbData;
+    if (!d) return;
+    document.getElementById('qb-results').style.display = 'block';
+    document.getElementById('qb-progress-card').style.display = 'none';
+
+    const parts = [];
+    if (d.accounts.length) parts.push(d.accounts.length + ' accounts');
+    if (d.entries.length) parts.push(d.entries.length + ' journal entries (' + d.entries.reduce((s,e) => s + e.lines.length, 0) + ' line items)');
+    if (d.vendors.length) parts.push(d.vendors.length + ' vendors');
+    if (d.customers.length) parts.push(d.customers.length + ' customers');
+    if (d.summary.dateRange) parts.push('Date range: ' + d.summary.dateRange.from + ' to ' + d.summary.dateRange.to);
+    document.getElementById('qb-summary-text').textContent = parts.join(' | ');
+
+    // Accounts table
+    if (d.accounts.length) {
+      document.getElementById('qb-accounts-card').style.display = '';
+      document.getElementById('qb-accounts-title').textContent = 'Chart of Accounts (' + d.accounts.length + ')';
+      document.getElementById('qb-accounts-tbody').innerHTML = d.accounts.map(a => `
+        <tr>
+          <td>${escHtml(a.accountNumber)}</td>
+          <td>${escHtml(a.accountName)}</td>
+          <td><span class="tag tag-blue">${a.accountType}</span></td>
+          <td style="font-size:12px;">${escHtml(a.category)}</td>
+          <td class="text-right amount">${a.debitBalance ? fmtCurrency(a.debitBalance) : ''}</td>
+          <td class="text-right amount">${a.creditBalance ? fmtCurrency(a.creditBalance) : ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Entries preview (first 50 + last 50)
+    if (d.entries.length) {
+      document.getElementById('qb-entries-card').style.display = '';
+      document.getElementById('qb-entries-title').textContent = 'Journal Entries (' + d.entries.length + ')';
+      const preview = d.entries.length <= 100 ? d.entries : [...d.entries.slice(0, 50), ...d.entries.slice(-50)];
+      document.getElementById('qb-entries-tbody').innerHTML = preview.map((e, i) => `
+        <tr>
+          <td style="font-size:12px;">${escHtml(e.entryNumber)}</td>
+          <td>${escHtml(e.date || '')}</td>
+          <td style="font-size:12px;">${escHtml(e.transactionType || '')}</td>
+          <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(e.description || '')}</td>
+          <td>${e.lines.length}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Vendors
+    if (d.vendors.length) {
+      document.getElementById('qb-vendors-card').style.display = '';
+      document.getElementById('qb-vendors-title').textContent = 'Vendors (' + d.vendors.length + ')';
+      document.getElementById('qb-vendors-tbody').innerHTML = d.vendors.map(v =>
+        `<tr><td>${escHtml(v.name)}</td></tr>`
+      ).join('');
+    }
+
+    // Customers
+    if (d.customers.length) {
+      document.getElementById('qb-customers-card').style.display = '';
+      document.getElementById('qb-customers-title').textContent = 'Customers (' + d.customers.length + ')';
+      document.getElementById('qb-customers-tbody').innerHTML = d.customers.map(c =>
+        `<tr><td>${escHtml(c.name)}</td></tr>`
+      ).join('');
+    }
+  }
+
+  window.clearQBData = async function() {
+    if (!confirm('WARNING: This will delete ALL existing accounting data (accounts, journal entries, vendors, customers). Continue?')) return;
+    if (!confirm('Are you absolutely sure? This cannot be undone.')) return;
+    try {
+      const data = await api('/api/qb/clear', { method: 'DELETE' });
+      toast('All data cleared. Ready for fresh import.', 'success');
+      loadAllAccounts();
+    } catch (err) {
+      toast('Clear failed: ' + err.message, 'error');
+    }
+  };
+
+  window.executeQBImport = async function() {
+    if (!state.qbData) { toast('No QB data parsed. Upload files first.', 'error'); return; }
+    const d = state.qbData;
+    const totalItems = (d.accounts?.length || 0) + (d.entries?.length || 0) + (d.vendors?.length || 0) + (d.customers?.length || 0);
+    if (!confirm('Import ' + totalItems + ' items into SlickBooks?\n\n' +
+      (d.accounts?.length || 0) + ' accounts\n' +
+      (d.entries?.length || 0) + ' journal entries\n' +
+      (d.vendors?.length || 0) + ' vendors\n' +
+      (d.customers?.length || 0) + ' customers')) return;
+
+    document.getElementById('qb-progress-card').style.display = '';
+    document.getElementById('qb-progress-text').textContent = 'Importing data... This may take a minute for large datasets.';
+    document.getElementById('qb-progress-bar').style.width = '10%';
+
+    try {
+      const data = await api('/api/qb/import', {
+        method: 'POST',
+        body: {
+          accounts: d.accounts,
+          entries: d.entries,
+          vendors: d.vendors,
+          customers: d.customers
+        }
+      });
+
+      document.getElementById('qb-progress-bar').style.width = '100%';
+      const r = data.data;
+      const details = [
+        'Accounts: ' + r.accounts.created + ' created, ' + r.accounts.skipped + ' skipped',
+        'Journal Entries: ' + r.entries.created + ' created, ' + r.entries.skipped + ' skipped',
+        'Vendors: ' + r.vendors.created + ' created, ' + r.vendors.skipped + ' skipped',
+        'Customers: ' + r.customers.created + ' created, ' + r.customers.skipped + ' skipped'
+      ];
+      if (r.entries.errors && r.entries.errors.length > 0) {
+        details.push('Errors: ' + r.entries.errors.length + ' (see console)');
+        console.warn('QB Import Errors:', r.entries.errors);
+      }
+      document.getElementById('qb-progress-text').textContent = 'Import complete!';
+      document.getElementById('qb-progress-details').innerHTML = details.join('<br>');
+      toast('QuickBooks import complete! ' + r.entries.created + ' journal entries imported.', 'success');
+      loadAllAccounts();
+    } catch (err) {
+      document.getElementById('qb-progress-text').textContent = 'Import failed: ' + err.message;
+      document.getElementById('qb-progress-bar').style.width = '0%';
+      toast('Import failed: ' + err.message, 'error');
+    }
+  };
+
+  /* ── Drag & Drop for QB Import ──────────────────────── */
+  const qbDropzone = document.getElementById('qb-dropzone');
+  if (qbDropzone) {
+    ['dragenter', 'dragover'].forEach(evt => {
+      qbDropzone.addEventListener(evt, e => { e.preventDefault(); qbDropzone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+      qbDropzone.addEventListener(evt, e => { e.preventDefault(); qbDropzone.classList.remove('dragover'); });
+    });
+    qbDropzone.addEventListener('drop', e => {
+      if (e.dataTransfer.files.length > 0) handleQBUpload(e.dataTransfer.files);
     });
   }
 

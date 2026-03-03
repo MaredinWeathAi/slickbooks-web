@@ -78,6 +78,7 @@ const reportsRoutes = require('./routes/reports');
 const dashboardRoutes = require('./routes/dashboard');
 const importRoutes = require('./routes/import');
 const feesRoutes = require('./routes/fees');
+const qbImportRoutes = require('./routes/qb-import');
 
 app.use('/api', authRoutes);
 app.use('/api', accountsRoutes);
@@ -86,6 +87,7 @@ app.use('/api', reportsRoutes);
 app.use('/api', dashboardRoutes);
 app.use('/api', importRoutes);
 app.use('/api', feesRoutes);
+app.use('/api', qbImportRoutes);
 
 // SPA fallback — serve index.html for all non-API routes
 app.get('*', (req, res) => {

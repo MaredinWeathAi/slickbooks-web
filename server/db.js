@@ -146,6 +146,36 @@ async function initializeDatabase() {
       )
     `);
 
+    // Vendors
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vendors (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        full_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(100),
+        address TEXT,
+        account_number VARCHAR(100),
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Customers / Clients
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS customers (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        full_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(100),
+        billing_address TEXT,
+        shipping_address TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // Activity Feed
     await client.query(`
       CREATE TABLE IF NOT EXISTS activity_feed (
