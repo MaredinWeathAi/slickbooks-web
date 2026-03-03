@@ -115,8 +115,46 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 // Initialize database after server starts (Railway pattern)
-initializeDatabase().then(() => {
+initializeDatabase().then(async () => {
   console.log('[DB] Database ready');
+
+  // ─── One-time migrations ───
+  try {
+    const db = require('./db');
+
+    // Migration: Merge "Client Fee Account" + "Professional Services" → "Management Fees"
+    const migrationKey = 'merge_revenue_to_management_fees';
+    // Use a simple flag table to track migrations
+    await db.query(`CREATE TABLE IF NOT EXISTS migrations (key VARCHAR(200) PRIMARY KEY, ran_at TIMESTAMPTZ DEFAULT NOW())`);
+    const already = await db.queryOne('SELECT key FROM migrations WHERE key = $1', [migrationKey]);
+    if (!already) {
+      // Find source accounts
+      const sources = await db.query(
+        `SELECT id, account_name FROM chart_of_accounts WHERE account_name IN ('Client Fee Account', 'Professional Services') AND is_active = true`
+      );
+      if (sources.length > 0) {
+        const sourceIds = sources.map(s => s.id);
+        // Rename the first source to "Management Fees"
+        const targetId = sourceIds[0];
+        await db.query(`UPDATE chart_of_accounts SET account_name = 'Management Fees', updated_at = NOW() WHERE id = $1`, [targetId]);
+
+        // Move line_items from other sources to target
+        const otherIds = sourceIds.filter(id => id !== targetId);
+        if (otherIds.length > 0) {
+          for (const otherId of otherIds) {
+            await db.query(`UPDATE line_items SET account_id = $1 WHERE account_id = $2`, [targetId, otherId]);
+            await db.query(`UPDATE chart_of_accounts SET is_active = false, updated_at = NOW() WHERE id = $1`, [otherId]);
+          }
+        }
+        console.log(`[Migration] Merged ${sources.map(s => s.account_name).join(' + ')} → Management Fees (${sourceIds.length} accounts, target id=${targetId})`);
+      } else {
+        console.log('[Migration] No "Client Fee Account" or "Professional Services" found to merge');
+      }
+      await db.query('INSERT INTO migrations (key) VALUES ($1) ON CONFLICT DO NOTHING', [migrationKey]);
+    }
+  } catch (migErr) {
+    console.error('[Migration] Error:', migErr.message);
+  }
 }).catch(err => {
   console.error('[DB] Database initialization failed:', err.message);
 });
