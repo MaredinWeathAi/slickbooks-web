@@ -342,15 +342,15 @@ router.get('/reports/analytics', requireAuth, async (req, res) => {
 });
 
 // FLOFR Financial Statements (Florida Office of Financial Regulation)
-// Statement of Income + Statement of Financial Condition (Balance Sheet)
+// Statement of Income + Balance Sheet — matches accountant's exact format
 router.get('/reports/flofr', requireAuth, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    // Default to fiscal year if not provided
     const now = new Date();
     const year = startDate ? startDate.substring(0, 4) : String(now.getFullYear());
     const start = startDate || `${year}-01-01`;
     const end = endDate || `${year}-12-31`;
+    const yearNum = parseInt(year);
 
     // ─── Statement of Income (P&L) ───
     const revenue = await getAccountTotals('REVENUE', start, end);
@@ -360,7 +360,7 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
     const totalExpenses = Math.round(expenses.reduce((s, a) => s + a.balance, 0) * 100) / 100;
     const netIncome = Math.round((totalRevenue - totalExpenses) * 100) / 100;
 
-    // Group expenses by category/sub_category for FLOFR format
+    // Group expenses by category for FLOFR format
     const expenseCategories = {};
     for (const exp of expenses) {
       const cat = exp.category || exp.account_name || 'Other Expenses';
@@ -368,23 +368,117 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
       expenseCategories[cat].accounts.push(exp);
       expenseCategories[cat].total += exp.balance;
     }
-
-    // Round category totals
     for (const cat of Object.keys(expenseCategories)) {
       expenseCategories[cat].total = Math.round(expenseCategories[cat].total * 100) / 100;
     }
 
-    // ─── Statement of Financial Condition (Balance Sheet) ───
-    const assets = await getAccountBalances('ASSET', end);
-    const liabilities = await getAccountBalances('LIABILITY', end);
-    const equity = await getAccountBalances('EQUITY', end);
+    // ─── Balance Sheet ───
 
-    // Current earnings
-    const currentEarnings = netIncome;
+    // === Accounts Receivable: Management fees received in the FOLLOWING month ===
+    // e.g., for YE 12/31/2025, get January 2026 management fee revenue
+    const endDate_ = new Date(end + 'T00:00:00');
+    const nextMonthStart = new Date(endDate_.getFullYear(), endDate_.getMonth() + 1, 1);
+    const nextMonthEnd = new Date(endDate_.getFullYear(), endDate_.getMonth() + 2, 0);
+    const nextMonthStartStr = nextMonthStart.toISOString().split('T')[0];
+    const nextMonthEndStr = nextMonthEnd.toISOString().split('T')[0];
 
-    const totalAssets = Math.round(assets.reduce((s, a) => s + a.balance, 0) * 100) / 100;
-    const totalLiabilities = Math.round(liabilities.reduce((s, a) => s + a.balance, 0) * 100) / 100;
-    const totalEquity = Math.round(equity.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    // Get management fees for the following month
+    const nextMonthRevenue = await getAccountTotals('REVENUE', nextMonthStartStr, nextMonthEndStr);
+    // Filter to only "Management Fees" account (or similar advisory fee accounts)
+    const mgmtFeeNextMonth = nextMonthRevenue.filter(a =>
+      /management fee|advisory fee|client fee/i.test(a.account_name)
+    );
+    const accountsReceivable = Math.round(mgmtFeeNextMonth.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+
+    // === Cash and other current assets ===
+    const allAssets = await getAccountBalances('ASSET', end);
+    // Separate cash/bank from equipment/other
+    const cashAccounts = allAssets.filter(a =>
+      /cash|bank|check|operat|money market|savings/i.test(a.account_name) &&
+      !/receivable|equipment|furniture|deprec|intangible|amort/i.test(a.account_name)
+    );
+    const equipmentAccounts = allAssets.filter(a =>
+      /equipment|furniture|furnish|computer|vehicle|fixed asset/i.test(a.account_name) &&
+      !/deprec|amort/i.test(a.account_name)
+    );
+    const depreciationAccounts = allAssets.filter(a =>
+      /deprec/i.test(a.account_name)
+    );
+    const intangibleAccounts = allAssets.filter(a =>
+      /intangible|amort/i.test(a.account_name)
+    );
+
+    const totalCash = Math.round(cashAccounts.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const totalCurrentAssets = Math.round((accountsReceivable + totalCash) * 100) / 100;
+    const totalEquipment = Math.round(equipmentAccounts.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const totalDepreciation = Math.round(depreciationAccounts.reduce((s, a) => s + Math.abs(a.balance), 0) * 100) / 100;
+    const netEquipment = Math.round((totalEquipment - totalDepreciation) * 100) / 100;
+    const totalIntangibles = Math.round(intangibleAccounts.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const totalAssets = Math.round((totalCurrentAssets + netEquipment + totalIntangibles) * 100) / 100;
+
+    // === Liabilities — Eliminate "Loan Payable" (old data) ===
+    const allLiabilities = await getAccountBalances('LIABILITY', end);
+    const filteredLiabilities = allLiabilities.filter(a =>
+      !/loan payable/i.test(a.account_name)
+    );
+    const totalLiabilities = Math.round(filteredLiabilities.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+
+    // === Shareholders' Equity — use 2024 base, adjust with current year data ===
+    const allEquity = await getAccountBalances('EQUITY', end);
+
+    // Get 2024 base equity (prior year retained earnings)
+    // For the report year, prior year = yearNum - 1
+    const priorYearEnd = `${yearNum - 1}-12-31`;
+    const priorYearEquity = await getAccountBalances('EQUITY', priorYearEnd);
+
+    // Prior year net income (for retained earnings calc)
+    const priorYearRevenue = await getAccountTotals('REVENUE', `${yearNum - 1}-01-01`, priorYearEnd);
+    const priorYearExpenses = await getAccountTotals('EXPENSE', `${yearNum - 1}-01-01`, priorYearEnd);
+    const priorYearNetIncome = Math.round(
+      (priorYearRevenue.reduce((s, a) => s + a.balance, 0) - priorYearExpenses.reduce((s, a) => s + a.balance, 0)) * 100
+    ) / 100;
+
+    // Common Stock and Paid-in-Capital: use current equity account balances
+    const commonStock = allEquity.filter(a => /common stock/i.test(a.account_name));
+    const paidInCapital = allEquity.filter(a => /paid.in.capital|additional paid/i.test(a.account_name));
+    const retainedEarningsAcct = allEquity.filter(a => /retained earning/i.test(a.account_name));
+    const ownerDistributions = allEquity.filter(a => /distribution|draw/i.test(a.account_name));
+
+    const commonStockTotal = Math.round(commonStock.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const paidInCapitalTotal = Math.round(paidInCapital.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+
+    // Retained earnings = prior year retained earnings account balance + prior year net income
+    // Then current year adjustments: + current year net income - current year distributions
+    const priorRetainedAcct = priorYearEquity.filter(a => /retained earning/i.test(a.account_name));
+    const priorRetained = Math.round(priorRetainedAcct.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+
+    // Base retained earnings from 2024: account balance + 2024 net income
+    const retainedEarningsBase = Math.round((priorRetained + priorYearNetIncome) * 100) / 100;
+
+    // Current year distributions
+    const currentYearDistributions = ownerDistributions.length > 0
+      ? Math.round(ownerDistributions.reduce((s, a) => s + Math.abs(a.balance), 0) * 100) / 100
+      : 0;
+
+    // Get only current year distributions (not all-time)
+    let currentYearDistAmount = 0;
+    if (ownerDistributions.length > 0) {
+      const distIds = ownerDistributions.map(a => a.id);
+      for (const distId of distIds) {
+        const distTotals = await getAccountTotals('EQUITY', start, end);
+        const distAcct = distTotals.filter(a => a.id === distId);
+        if (distAcct.length > 0) {
+          currentYearDistAmount += Math.abs(distAcct[0].balance);
+        }
+      }
+      currentYearDistAmount = Math.round(currentYearDistAmount * 100) / 100;
+    }
+
+    // Final retained earnings = base (from 2024) + current year net income - current year distributions
+    const retainedEarnings = Math.round((retainedEarningsBase + netIncome - currentYearDistAmount) * 100) / 100;
+
+    const totalShareholdersEquity = Math.round((commonStockTotal + paidInCapitalTotal + retainedEarnings) * 100) / 100;
+    const totalLiabAndEquity = Math.round((totalLiabilities + totalShareholdersEquity) * 100) / 100;
 
     res.json({
       success: true,
@@ -396,20 +490,46 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
           expenses: { accounts: expenses, total: totalExpenses, categories: expenseCategories },
           netIncome
         },
-        statementOfFinancialCondition: {
-          assets: { accounts: assets, total: totalAssets },
-          liabilities: { accounts: liabilities, total: totalLiabilities },
-          equity: {
-            accounts: equity,
-            total: totalEquity,
-            currentEarnings,
-            totalWithEarnings: Math.round((totalEquity + currentEarnings) * 100) / 100
+        balanceSheet: {
+          currentAssets: {
+            accountsReceivable,
+            arNote: `Management fees received ${nextMonthStart.toLocaleString('en-US', { month: 'long', year: 'numeric' })}`,
+            cash: totalCash,
+            cashAccounts,
+            totalCurrentAssets
           },
-          totalLiabilitiesAndEquity: Math.round((totalLiabilities + totalEquity + currentEarnings) * 100) / 100
+          equipmentAndFurnishings: {
+            gross: totalEquipment,
+            accounts: equipmentAccounts,
+            accumulatedDepreciation: totalDepreciation,
+            depreciationAccounts,
+            net: netEquipment
+          },
+          intangibleAssets: totalIntangibles,
+          totalAssets,
+          currentLiabilities: {
+            accounts: filteredLiabilities,
+            total: totalLiabilities,
+            eliminatedNote: 'Loan Payable excluded (historical data)'
+          },
+          shareholdersEquity: {
+            commonStock: commonStockTotal,
+            paidInCapital: paidInCapitalTotal,
+            retainedEarnings,
+            retainedEarningsDetail: {
+              priorYearBase: retainedEarningsBase,
+              priorYearLabel: `${yearNum - 1} base`,
+              currentYearNetIncome: netIncome,
+              currentYearDistributions: currentYearDistAmount
+            },
+            totalShareholdersEquity
+          },
+          totalLiabilitiesAndEquity: totalLiabAndEquity
         }
       }
     });
   } catch (err) {
+    console.error('[FLOFR Report] Error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

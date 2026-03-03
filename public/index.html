@@ -2734,124 +2734,184 @@
     output.innerHTML = html;
   }
 
-  /* ── FLOFR Financial Statements Renderer ─────────────── */
+  /* ── FLOFR Financial Statements Renderer (matches accountant format) ── */
   function renderFLOFRStatements(d) {
     const output = document.getElementById('report-output');
     const period = d.period;
     const inc = d.statementOfIncome;
-    const bs = d.statementOfFinancialCondition;
+    const bs = d.balanceSheet;
 
-    const fmtPeriod = period.startDate && period.endDate
-      ? `${fmtDate(period.startDate)} through ${fmtDate(period.endDate)}`
-      : `Year Ended December 31, ${period.year}`;
+    // Date formatting for header
+    const endDateObj = new Date(period.endDate + 'T00:00:00');
+    const reportDateStr = endDateObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
 
-    // Build expense rows grouped by category
+    // Period string for Statement of Income
+    const periodEndStr = endDateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const fmtPeriod = `For the Year Ended ${periodEndStr}`;
+
+    // Build expense rows grouped by category (matching accountant format: one line per expense)
     const categories = inc.expenses.categories || {};
     let expenseRows = '';
     const sortedCats = Object.entries(categories).sort((a, b) => b[1].total - a[1].total);
     for (const [catName, catData] of sortedCats) {
       if (catData.accounts.length === 1) {
-        // Single account in category — show as single row
-        expenseRows += `<tr><td style="padding-left:24px;">${escHtml(catData.accounts[0].account_name)}</td><td class="amount text-right">${fmtCurrency(catData.total)}</td></tr>`;
+        expenseRows += `<tr><td style="padding-left:80px;">${escHtml(catData.accounts[0].account_name)}</td><td class="amount text-right">${fmtCurrency(catData.total)}</td></tr>`;
       } else {
-        // Multiple accounts — show category header + details
         for (const a of catData.accounts) {
-          expenseRows += `<tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>`;
+          expenseRows += `<tr><td style="padding-left:80px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>`;
         }
       }
     }
 
+    // Liability rows
+    const liabRows = bs.currentLiabilities.accounts.length > 0
+      ? bs.currentLiabilities.accounts.map(a =>
+          `<tr><td style="padding-left:40px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>`
+        ).join('')
+      : `<tr><td style="padding-left:40px;">Accounts Payable and Accrued Expenses</td><td class="amount text-right">$0.00</td></tr>`;
+
     output.innerHTML = `
-      <div id="flofr-report-content">
-        <!-- ═══ STATEMENT OF INCOME ═══ -->
-        <div style="text-align:center;margin-bottom:8px;">
-          <div style="font-size:16px;font-weight:700;">MAREDIN CORPORATION</div>
-          <div style="font-size:11px;color:var(--text-muted);">d/b/a Maredin Wealth Advisors</div>
-        </div>
-        <h3 style="text-align:center;margin-bottom:4px;font-size:15px;">Statement of Income</h3>
-        <div style="text-align:center;color:var(--text-muted);font-size:13px;margin-bottom:24px;">${fmtPeriod}</div>
+      <div id="flofr-report-content" style="max-width:650px;margin:0 auto;font-family:'Inter',sans-serif;">
 
-        <table class="data-table" style="margin-bottom:8px;">
-          <thead><tr><th>Description</th><th class="text-right" style="width:140px;">Amount</th></tr></thead>
-          <tbody>
-            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">REVENUE</td></tr>
-            ${inc.revenue.accounts.map(a => `
-              <tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
-            `).join('')}
-            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Revenue</strong></td><td class="amount text-right"><strong>${fmtCurrency(inc.revenue.total)}</strong></td></tr>
-
-            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">EXPENSES</td></tr>
-            ${expenseRows}
-            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Expenses</strong></td><td class="amount text-right"><strong>${fmtCurrency(inc.expenses.total)}</strong></td></tr>
-
-            <tr class="report-grand-total">
-              <td><strong>NET INCOME</strong></td>
-              <td class="amount text-right ${inc.netIncome >= 0 ? 'text-success' : 'text-danger'}"><strong>${fmtCurrency(inc.netIncome)}</strong></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div style="height:40px;"></div>
-
-        <!-- ═══ STATEMENT OF FINANCIAL CONDITION (BALANCE SHEET) ═══ -->
-        <div style="text-align:center;margin-bottom:8px;">
-          <div style="font-size:16px;font-weight:700;">MAREDIN CORPORATION</div>
-          <div style="font-size:11px;color:var(--text-muted);">d/b/a Maredin Wealth Advisors</div>
-        </div>
-        <h3 style="text-align:center;margin-bottom:4px;font-size:15px;">Statement of Financial Condition</h3>
-        <div style="text-align:center;color:var(--text-muted);font-size:13px;margin-bottom:24px;">As of ${fmtDate(period.endDate)}</div>
-
-        <table class="data-table">
-          <thead><tr><th>Description</th><th class="text-right" style="width:140px;">Amount</th></tr></thead>
-          <tbody>
-            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">ASSETS</td></tr>
-            ${bs.assets.accounts.map(a => `
-              <tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
-            `).join('')}
-            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Assets</strong></td><td class="amount text-right"><strong>${fmtCurrency(bs.assets.total)}</strong></td></tr>
-
-            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">LIABILITIES</td></tr>
-            ${bs.liabilities.accounts.length > 0 ? bs.liabilities.accounts.map(a => `
-              <tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
-            `).join('') : '<tr><td style="padding-left:24px;color:var(--text-muted);">None</td><td class="amount text-right">$0.00</td></tr>'}
-            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Liabilities</strong></td><td class="amount text-right"><strong>${fmtCurrency(bs.liabilities.total)}</strong></td></tr>
-
-            <tr style="background:var(--bg-secondary);"><td colspan="2" style="font-weight:700;font-size:13px;">STOCKHOLDERS' EQUITY</td></tr>
-            ${bs.equity.accounts.map(a => `
-              <tr><td style="padding-left:24px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>
-            `).join('')}
-            <tr><td style="padding-left:24px;"><em>Current Year Earnings</em></td><td class="amount text-right"><em>${fmtCurrency(bs.equity.currentEarnings)}</em></td></tr>
-            <tr class="report-total-row"><td style="padding-left:12px;"><strong>Total Stockholders' Equity</strong></td><td class="amount text-right"><strong>${fmtCurrency(bs.equity.totalWithEarnings)}</strong></td></tr>
-
-            <tr class="report-grand-total">
-              <td><strong>TOTAL LIABILITIES & STOCKHOLDERS' EQUITY</strong></td>
-              <td class="amount text-right"><strong>${fmtCurrency(bs.totalLiabilitiesAndEquity)}</strong></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div style="height:40px;"></div>
-
-        <!-- ═══ AFFIRMATION ═══ -->
-        <div style="text-align:center;margin-bottom:8px;">
-          <div style="font-size:16px;font-weight:700;">MAREDIN CORPORATION</div>
-          <div style="font-size:11px;color:var(--text-muted);">d/b/a Maredin Wealth Advisors</div>
-        </div>
-        <h3 style="text-align:center;margin-bottom:24px;font-size:15px;">Affirmation</h3>
-
-        <div style="max-width:600px;margin:0 auto;font-size:13px;line-height:1.8;padding:0 20px;">
-          <p>The undersigned, being duly authorized, hereby affirms that the attached financial statements of
-          <strong>Maredin Corporation d/b/a Maredin Wealth Advisors</strong> as of <strong>${fmtDate(period.endDate)}</strong>
-          and for the period then ended, are true, correct and complete to the best of my knowledge and belief.</p>
-
-          <div style="margin-top:48px;">
-            <div style="border-bottom:1px solid var(--text);width:300px;margin-bottom:4px;"></div>
-            <div style="font-weight:600;">Marcelo Zinn, President</div>
-            <div style="color:var(--text-muted);font-size:12px;">Maredin Corporation</div>
+        <!-- ═══════ PAGE 1: STATEMENT OF INCOME ═══════ -->
+        <div style="margin-bottom:60px;">
+          <!-- Header with logo area -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;padding-bottom:12px;border-bottom:2px solid #333;">
+            <div>
+              <div style="font-size:20px;font-weight:700;letter-spacing:-0.5px;">Maredin</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:-2px;">Wealth Advisors</div>
+            </div>
+            <div style="font-size:13px;color:var(--text-secondary);">${reportDateStr}</div>
           </div>
 
-          <div style="margin-top:32px;">
-            <div style="color:var(--text-muted);font-size:12px;">Date: ____________________</div>
+          <h3 style="text-align:center;margin-bottom:28px;font-size:15px;font-weight:700;text-decoration:underline;">Statement of Income</h3>
+
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <tbody>
+              <!-- Revenue -->
+              <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Revenue</td><td class="amount text-right" style="padding:6px 0;width:120px;font-weight:600;">${fmtCurrency(inc.revenue.total)}</td></tr>
+              <tr><td colspan="2" style="height:16px;"></td></tr>
+
+              <!-- Expenses -->
+              <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Expenses</td><td></td></tr>
+              ${expenseRows}
+              <tr><td colspan="2" style="height:8px;"></td></tr>
+              <tr style="border-top:1px solid #999;">
+                <td style="padding:8px 0;font-weight:700;">Total Expenses</td>
+                <td class="amount text-right" style="padding:8px 0;font-weight:700;border-top:1px solid #999;text-decoration:underline;">${fmtCurrency(inc.expenses.total)}</td>
+              </tr>
+              <tr><td colspan="2" style="height:16px;"></td></tr>
+
+              <!-- Net Income -->
+              <tr style="border-top:2px solid #333;">
+                <td style="padding:10px 0;font-weight:700;">Net Income</td>
+                <td class="amount text-right" style="padding:10px 0;font-weight:700;border-top:2px solid #333;text-decoration:underline;${inc.netIncome >= 0 ? '' : 'color:var(--danger);'}">${fmtCurrency(inc.netIncome)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ═══════ PAGE 2: BALANCE SHEET ═══════ -->
+        <div style="margin-bottom:60px;page-break-before:always;">
+          <h3 style="text-align:center;margin-bottom:28px;font-size:15px;font-weight:700;text-decoration:underline;">Balance Sheet</h3>
+
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <tbody>
+              <!-- Current Assets -->
+              <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Current Assets:</td><td style="width:120px;"></td></tr>
+              <tr>
+                <td style="padding:4px 0 4px 40px;">Accounts Receivable</td>
+                <td class="amount text-right" style="padding:4px 0;">${fmtCurrency(bs.currentAssets.accountsReceivable)}</td>
+              </tr>
+              ${bs.currentAssets.cashAccounts.map(a =>
+                `<tr><td style="padding:4px 0 4px 40px;">${escHtml(a.account_name)}</td><td class="amount text-right" style="padding:4px 0;">${fmtCurrency(a.balance)}</td></tr>`
+              ).join('')}
+              ${bs.currentAssets.cashAccounts.length === 0 ? `<tr><td style="padding:4px 0 4px 40px;">Cash</td><td class="amount text-right" style="padding:4px 0;">${fmtCurrency(bs.currentAssets.cash)}</td></tr>` : ''}
+              <tr style="border-top:1px solid #999;">
+                <td style="padding:6px 0;font-weight:700;">Total Current Assets</td>
+                <td class="amount text-right" style="padding:6px 0;font-weight:600;border-top:1px solid #999;">${fmtCurrency(bs.currentAssets.totalCurrentAssets)}</td>
+              </tr>
+              <tr><td colspan="2" style="height:12px;"></td></tr>
+
+              <!-- Equipment and Furnishings -->
+              <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Equipment and Furnishings</td><td class="amount text-right" style="padding:6px 0;">${fmtCurrency(bs.equipmentAndFurnishings.gross)}</td></tr>
+              <tr><td style="padding:4px 0 4px 0;"><strong>Less:</strong> Accumulated Depreciation</td><td class="amount text-right" style="padding:4px 0;">(${fmtCurrency(bs.equipmentAndFurnishings.accumulatedDepreciation)})</td></tr>
+              <tr style="border-top:1px solid #999;">
+                <td style="padding:6px 0;font-weight:700;">Total Equipment and Furnishings</td>
+                <td class="amount text-right" style="padding:6px 0;font-weight:600;border-top:1px solid #999;">${fmtCurrency(bs.equipmentAndFurnishings.net)}</td>
+              </tr>
+              <tr><td colspan="2" style="height:12px;"></td></tr>
+
+              <!-- Intangible Assets -->
+              <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Intangible Assets Less Accumulated Amortization</td><td class="amount text-right" style="padding:6px 0;">${fmtCurrency(bs.intangibleAssets)}</td></tr>
+              <tr><td colspan="2" style="height:8px;"></td></tr>
+
+              <!-- Total Assets -->
+              <tr style="border-top:2px solid #333;">
+                <td style="padding:10px 0;font-weight:700;font-size:14px;">Total Assets</td>
+                <td class="amount text-right" style="padding:10px 0;font-weight:700;font-size:14px;border-top:2px solid #333;">${fmtCurrency(bs.totalAssets)}</td>
+              </tr>
+              <tr><td colspan="2" style="height:24px;"></td></tr>
+
+              <!-- Current Liabilities -->
+              <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Current Liabilities:</td><td></td></tr>
+              ${liabRows}
+              <tr style="border-top:1px solid #999;">
+                <td style="padding:6px 0;font-weight:700;">Total Current Liabilities</td>
+                <td class="amount text-right" style="padding:6px 0;font-weight:600;border-top:1px solid #999;">${fmtCurrency(bs.currentLiabilities.total)}</td>
+              </tr>
+              <tr><td colspan="2" style="height:16px;"></td></tr>
+
+              <!-- Shareholders Equity -->
+              <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Shareholders Equity</td><td></td></tr>
+              <tr><td style="padding:4px 0 4px 40px;">Common Stock, No Par Value; 1,000 Shares Authorized</td><td class="amount text-right" style="padding:4px 0;">${fmtCurrency(bs.shareholdersEquity.commonStock)}</td></tr>
+              <tr><td style="padding:4px 0 4px 40px;">Paid-in-Capital</td><td class="amount text-right" style="padding:4px 0;">${fmtCurrency(bs.shareholdersEquity.paidInCapital)}</td></tr>
+              <tr><td style="padding:4px 0 4px 40px;">Retained Earnings</td><td class="amount text-right" style="padding:4px 0;">${fmtCurrency(bs.shareholdersEquity.retainedEarnings)}</td></tr>
+              <tr><td colspan="2" style="height:8px;"></td></tr>
+              <tr style="border-top:1px solid #999;">
+                <td style="padding:8px 0;font-weight:700;">Total Shareholders Equity</td>
+                <td class="amount text-right" style="padding:8px 0;font-weight:600;border-top:1px solid #999;">${fmtCurrency(bs.shareholdersEquity.totalShareholdersEquity)}</td>
+              </tr>
+
+              <!-- Total Liabilities and Shareholders Equity -->
+              <tr style="border-top:2px solid #333;">
+                <td style="padding:10px 0;font-weight:700;font-size:14px;">Total Liabilities and Shareholders Equity</td>
+                <td class="amount text-right" style="padding:10px 0;font-weight:700;font-size:14px;border-top:2px solid #333;">${fmtCurrency(bs.totalLiabilitiesAndEquity)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ═══════ PAGE 3: AFFIRMATION ═══════ -->
+        <div style="page-break-before:always;">
+          <div style="max-width:580px;margin:0 auto;font-size:13px;line-height:2;padding:20px 0;">
+            <p style="text-indent:20px;"><em>"I, Marcelo Zinn, as President of Maredin Corporation (dba Maredin Wealth Advisors),
+            do hereby affirm that the attached financial statements, including the Statement of
+            Financial Condition (Balance Sheet) and Statement of Income, are true and correct to the
+            best of my knowledge and belief.</em></p>
+
+            <p style="text-indent:20px;margin-top:16px;"><em>"This affirmation is made in accordance with the requirements set forth by the Florida
+            Office of Financial Regulation, and I acknowledge that any false statements or
+            misrepresentations may be subject to penalties under Florida law."</em></p>
+
+            <div style="margin-top:32px;line-height:1.8;">
+              <div>Notary Public</div>
+              <div style="margin-top:8px;">State of Florida</div>
+              <div>County of Miami Dade</div>
+            </div>
+
+            <div style="margin-top:32px;line-height:1.8;">
+              <div>Sworn to (or affirmed) and subscribed before me by means of () Physical presence or ()
+              online notarization, this ___ Day of __________, ${period.year + 1 || new Date().getFullYear()} by</div>
+            </div>
+
+            <div style="margin-top:40px;">
+              <div>Notary Signature:____________________</div>
+            </div>
+
+            <div style="margin-top:24px;">
+              <div>Notary Seal</div>
+            </div>
           </div>
         </div>
       </div>
