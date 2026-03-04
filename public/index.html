@@ -3825,8 +3825,8 @@
           <tr>
             <td>${fmtDate(imp.import_date)}</td>
             <td>${escHtml(imp.file_name)}</td>
-            <td><span class="tag ${imp.metadata && JSON.parse(imp.metadata || '{}').import_type === 'cc' ? 'tag-purple' : 'tag-blue'}">
-              ${imp.metadata && JSON.parse(imp.metadata || '{}').import_type === 'cc' ? 'CC' : 'Bank'}
+            <td><span class="tag ${(typeof imp.metadata === 'object' ? imp.metadata : JSON.parse(imp.metadata || '{}'))?.import_type === 'cc' ? 'tag-purple' : 'tag-blue'}">
+              ${(typeof imp.metadata === 'object' ? imp.metadata : JSON.parse(imp.metadata || '{}'))?.import_type === 'cc' ? 'CC' : 'Bank'}
             </span></td>
             <td>${imp.transaction_count}</td>
             <td><span class="tag ${imp.status === 'imported' ? 'tag-green' : 'tag-yellow'}">${escHtml(imp.status)}</span></td>
