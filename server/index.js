@@ -163,12 +163,12 @@ initializeDatabase().then(async () => {
       await db.query('INSERT INTO migrations (key) VALUES ($1) ON CONFLICT DO NOTHING', [migV2Key]);
     }
 
-    // Cleanup: Remove temporary diagnostic user
-    const cleanupKey = 'cleanup_diag_user';
+    // Cleanup: Remove temporary diagnostic users
+    const cleanupKey = 'cleanup_diag_users_v2';
     const alreadyCleanup = await db.queryOne('SELECT key FROM migrations WHERE key = $1', [cleanupKey]);
     if (!alreadyCleanup) {
-      await db.query(`DELETE FROM users WHERE username = 'diagtemp'`);
-      console.log('[Migration] Removed temporary diagnostic user');
+      await db.query(`DELETE FROM users WHERE username IN ('diagtemp', 'diagtemp2')`);
+      console.log('[Migration] Removed temporary diagnostic users');
       await db.query('INSERT INTO migrations (key) VALUES ($1) ON CONFLICT DO NOTHING', [cleanupKey]);
     }
 
