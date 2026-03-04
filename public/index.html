@@ -528,6 +528,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
           Reconciliation
         </div>
+        <div class="nav-link" onclick="switchView('invoices')" data-view="invoices">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Invoices
+        </div>
       </div>
 
       <div class="nav-section">
@@ -1271,6 +1275,89 @@
         </div>
       </div>
 
+      <!-- ═══════ Invoices View ═══════ -->
+      <div class="view" id="invoices-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Invoices</div>
+            <div class="page-subtitle">Generate and manage advisory fee invoices for Schwab clients</div>
+          </div>
+        </div>
+
+        <!-- Generate Invoice Card -->
+        <div class="card" style="margin-bottom:24px;">
+          <div class="card-header"><div class="card-title">Generate Invoice</div></div>
+          <div style="padding:20px;">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Client</label>
+                <select class="form-input" id="inv-client">
+                  <option value="wilson">David &amp; Marguerite Wilson</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Custodian</label>
+                <input type="text" class="form-input" id="inv-custodian" value="Charles Schwab & Co., Inc." readonly style="background:var(--bg-secondary);">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Month</label>
+                <select class="form-input" id="inv-month">
+                  <option value="1">January</option><option value="2">February</option>
+                  <option value="3">March</option><option value="4">April</option>
+                  <option value="5">May</option><option value="6">June</option>
+                  <option value="7">July</option><option value="8">August</option>
+                  <option value="9">September</option><option value="10">October</option>
+                  <option value="11">November</option><option value="12">December</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Year</label>
+                <input type="number" class="form-input" id="inv-year" value="2026" min="2020" max="2030">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fee Rate (%)</label>
+                <input type="number" class="form-input" id="inv-rate" value="1.00" step="0.01" min="0" max="5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fee Amount ($)</label>
+                <input type="number" class="form-input" id="inv-amount" placeholder="e.g. 3954.11" step="0.01" min="0">
+              </div>
+            </div>
+            <div class="form-row" style="align-items:center;">
+              <div class="form-group" style="flex:1;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-secondary);">
+                  <input type="checkbox" id="inv-create-je" checked style="width:16px;height:16px;">
+                  Also create journal entry (DR Accounts Receivable / CR Management Fees)
+                </label>
+              </div>
+              <div class="btn-group">
+                <button class="btn btn-primary" onclick="generateInvoice()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+                  Generate PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Invoice History -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Invoice History</div></div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr><th>Entry #</th><th>Date</th><th>Description</th><th>Amount</th><th>Created</th></tr>
+              </thead>
+              <tbody id="invoices-tbody">
+                <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /main-content -->
   </div><!-- /app-body -->
 </div><!-- /app-wrapper -->
@@ -1631,6 +1718,7 @@
     else if (view === 'qbimport') {} // static view, no data load needed
     else if (view === 'dataquality') runDataQuality();
     else if (view === 'reconciliation') runReconciliation();
+    else if (view === 'invoices') loadInvoices();
   };
 
   /* ── Load all accounts (for dropdowns) ──────────────── */
@@ -4061,6 +4149,100 @@
       setTimeout(runDataQuality, 1000);
     } catch (err) {
       toast('Fix failed: ' + err.message, 'error');
+    }
+  };
+
+  /* ── Invoices ─────────────────────────────────────── */
+  async function loadInvoices() {
+    const tbody = document.getElementById('invoices-tbody');
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">Loading...</td></tr>';
+    try {
+      const data = await api('/api/invoices/history');
+      const rows = data.data || [];
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">No invoices generated yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `<tr>
+        <td><span style="font-family:monospace;font-size:12px;">${escHtml(r.entry_number || '')}</span></td>
+        <td>${new Date(r.entry_date).toLocaleDateString()}</td>
+        <td>${escHtml(r.description)}</td>
+        <td style="text-align:right;font-weight:600;">$${parseFloat(r.total_amount).toLocaleString('en-US', {minimumFractionDigits:2})}</td>
+        <td style="color:var(--text-muted);font-size:12px;">${new Date(r.created_at).toLocaleDateString()}</td>
+      </tr>`).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger);">Error loading invoices</td></tr>';
+    }
+
+    // Set month dropdown to previous month
+    const now = new Date();
+    let prevMonth = now.getMonth(); // 0-indexed, so this IS the prev month number (1-indexed)
+    let prevYear = now.getFullYear();
+    if (prevMonth === 0) { prevMonth = 12; prevYear--; }
+    document.getElementById('inv-month').value = prevMonth;
+    document.getElementById('inv-year').value = prevYear;
+  }
+
+  window.generateInvoice = async function() {
+    const clientSelect = document.getElementById('inv-client');
+    const clientName = clientSelect.options[clientSelect.selectedIndex].text;
+    const custodian = document.getElementById('inv-custodian').value;
+    const month = document.getElementById('inv-month').value;
+    const year = document.getElementById('inv-year').value;
+    const amount = document.getElementById('inv-amount').value;
+    const rate = document.getElementById('inv-rate').value;
+    const createJE = document.getElementById('inv-create-je').checked;
+
+    if (!amount || parseFloat(amount) <= 0) {
+      alert('Please enter a fee amount');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/invoices/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          clientId: clientSelect.value,
+          clientName,
+          custodian,
+          month,
+          year,
+          feeAmount: amount,
+          feeRate: rate,
+          createJournalEntry: createJE
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to generate invoice');
+      }
+
+      // Download the PDF
+      const blob = await response.blob();
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const monthName = monthNames[parseInt(month) - 1];
+      const filename = `Invoice_${clientName.replace(/[^a-zA-Z0-9]/g, '_')}_${monthName}_${year}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      const jeNum = response.headers.get('X-Journal-Entry');
+      const msg = jeNum ? `Invoice downloaded! Journal entry ${jeNum} created.` : 'Invoice downloaded!';
+      alert(msg);
+
+      // Refresh history
+      loadInvoices();
+    } catch (e) {
+      alert('Error: ' + e.message);
     }
   };
 
