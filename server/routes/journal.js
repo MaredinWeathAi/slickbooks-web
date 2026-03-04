@@ -27,8 +27,22 @@ router.get('/journal-entries', requireAuth, async (req, res) => {
       whereClauses.push(`je.entry_date <= $${params.length}`);
     }
     if (search) {
-      params.push(`%${search}%`);
-      whereClauses.push(`(je.description ILIKE $${params.length} OR je.memo ILIKE $${params.length} OR je.entry_number ILIKE $${params.length})`);
+      // Map common keywords to account types for JE filter too
+      const typeMap = {
+        'expense': 'EXPENSE', 'expenses': 'EXPENSE',
+        'revenue': 'REVENUE', 'revenues': 'REVENUE', 'income': 'REVENUE',
+        'asset': 'ASSET', 'assets': 'ASSET',
+        'liability': 'LIABILITY', 'liabilities': 'LIABILITY',
+        'equity': 'EQUITY'
+      };
+      const mappedType = typeMap[search.toLowerCase().trim()];
+      if (mappedType) {
+        params.push(mappedType);
+        whereClauses.push(`EXISTS (SELECT 1 FROM line_items li2 JOIN chart_of_accounts coa ON li2.account_id = coa.id WHERE li2.journal_entry_id = je.id AND coa.account_type = $${params.length})`);
+      } else {
+        params.push(`%${search}%`);
+        whereClauses.push(`(je.description ILIKE $${params.length} OR je.memo ILIKE $${params.length} OR je.entry_number ILIKE $${params.length})`);
+      }
     }
 
     const whereStr = whereClauses.join(' AND ');
@@ -48,7 +62,13 @@ router.get('/journal-entries', requireAuth, async (req, res) => {
 
     const sql = `SELECT je.*,
       COALESCE(SUM(li.debit_amount), 0) as total_amount,
-      COUNT(li.id) as line_count
+      COUNT(li.id) as line_count,
+      (SELECT coa.account_type FROM line_items li2
+       JOIN chart_of_accounts coa ON li2.account_id = coa.id
+       WHERE li2.journal_entry_id = je.id
+       AND coa.account_type IN ('REVENUE','EXPENSE','EQUITY')
+       ORDER BY GREATEST(li2.debit_amount, li2.credit_amount) DESC
+       LIMIT 1) as primary_type
       FROM journal_entries je
       LEFT JOIN line_items li ON li.journal_entry_id = je.id
       WHERE ${whereStr}
@@ -183,7 +203,7 @@ router.post('/journal-entries/search', requireAuth, async (req, res) => {
   try {
     const { query: searchQuery, accountId, startDate, endDate, limit = 100, offset = 0 } = req.body;
     let sql = `SELECT je.*, li.account_id, li.debit_amount, li.credit_amount, li.description as line_description,
-      coa.account_name, coa.account_number
+      coa.account_name, coa.account_number, coa.account_type
       FROM journal_entries je
       JOIN line_items li ON li.journal_entry_id = je.id
       JOIN chart_of_accounts coa ON li.account_id = coa.id
@@ -194,8 +214,22 @@ router.post('/journal-entries/search', requireAuth, async (req, res) => {
     if (startDate) { params.push(startDate); sql += ` AND je.entry_date >= $${params.length}`; }
     if (endDate) { params.push(endDate); sql += ` AND je.entry_date <= $${params.length}`; }
     if (searchQuery) {
-      params.push(`%${searchQuery}%`);
-      sql += ` AND (je.description ILIKE $${params.length} OR li.description ILIKE $${params.length} OR coa.account_name ILIKE $${params.length})`;
+      // Map common keywords to account types
+      const typeMap = {
+        'expense': 'EXPENSE', 'expenses': 'EXPENSE',
+        'revenue': 'REVENUE', 'revenues': 'REVENUE', 'income': 'REVENUE',
+        'asset': 'ASSET', 'assets': 'ASSET',
+        'liability': 'LIABILITY', 'liabilities': 'LIABILITY',
+        'equity': 'EQUITY'
+      };
+      const mappedType = typeMap[searchQuery.toLowerCase().trim()];
+      if (mappedType) {
+        params.push(mappedType);
+        sql += ` AND coa.account_type = $${params.length}`;
+      } else {
+        params.push(`%${searchQuery}%`);
+        sql += ` AND (je.description ILIKE $${params.length} OR li.description ILIKE $${params.length} OR coa.account_name ILIKE $${params.length} OR je.memo ILIKE $${params.length} OR coa.account_type ILIKE $${params.length})`;
+      }
     }
 
     sql += ' ORDER BY je.entry_date DESC, je.id DESC';

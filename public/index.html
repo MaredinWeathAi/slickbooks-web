@@ -528,10 +528,6 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
           Reconciliation
         </div>
-        <div class="nav-link" onclick="switchView('invoices')" data-view="invoices">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          Invoices
-        </div>
       </div>
 
       <div class="nav-section">
@@ -539,6 +535,10 @@
         <div class="nav-link" onclick="switchView('reports')" data-view="reports">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
           Reports
+        </div>
+        <div class="nav-link" onclick="switchView('invoices')" data-view="invoices">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Invoices
         </div>
       </div>
 
@@ -707,7 +707,7 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Entry #</th><th>Date</th><th>Description</th><th>Type</th>
+                  <th>Entry #</th><th>Date</th><th>Description</th><th>Type</th><th>Category</th>
                   <th class="text-right">Amount</th><th>Status</th><th></th>
                 </tr>
               </thead>
@@ -728,7 +728,7 @@
         </div>
 
         <div class="filter-bar">
-          <input type="text" id="search-query" placeholder="Search description, memo, account name..." style="flex: 2; min-width: 200px;">
+          <input type="text" id="search-query" placeholder="Search by type (Revenue, Expenses), account name, or description..." style="flex: 2; min-width: 200px;">
           <label>Quick Range:</label>
           <select id="search-date-quick-range" onchange="applyQuickRange('search-date-quick-range','search-date-from','search-date-to')" style="min-width:140px;">
             <option value="">Custom</option>
@@ -748,7 +748,7 @@
           <div class="table-wrapper">
             <table class="data-table">
               <thead>
-                <tr><th>Entry #</th><th>Date</th><th>Account</th><th>Description</th><th class="text-right">Debit</th><th class="text-right">Credit</th></tr>
+                <tr><th>Entry #</th><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th class="text-right">Debit</th><th class="text-right">Credit</th></tr>
               </thead>
               <tbody id="search-tbody"></tbody>
             </table>
@@ -2124,17 +2124,19 @@
   function renderJournalEntries() {
     const tbody = document.getElementById('journal-tbody');
     if (state.jeEntries.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:30px;">No journal entries found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:30px;">No journal entries found</td></tr>';
       document.getElementById('journal-pagination').innerHTML = '';
       return;
     }
 
+    const typeColor = t => ({ REVENUE: 'tag-green', EXPENSE: 'tag-red', EQUITY: 'tag-purple' }[t] || 'tag-gray');
     tbody.innerHTML = state.jeEntries.map(e => `
       <tr style="cursor:pointer;" onclick="viewJournalEntry(${e.id})">
         <td><strong>${escHtml(e.entry_number)}</strong></td>
         <td>${fmtDate(e.entry_date)}</td>
         <td>${escHtml(e.description || '')}</td>
         <td><span class="tag tag-gray">${escHtml(e.entry_type)}</span></td>
+        <td>${e.primary_type ? '<span class="tag ' + typeColor(e.primary_type) + '">' + escHtml(e.primary_type) + '</span>' : '<span class="tag tag-gray">TRANSFER</span>'}</td>
         <td class="text-right">${fmtCurrency(parseFloat(e.total_amount || 0))}</td>
         <td>${e.is_posted ? '<span class="tag tag-green">Posted</span>' :
               e.is_void ? '<span class="tag tag-red">Void</span>' :
@@ -2496,16 +2498,18 @@
   function renderSearchResults() {
     const tbody = document.getElementById('search-tbody');
     if (state.searchResults.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:30px;">No results found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:30px;">No results found</td></tr>';
       document.getElementById('search-pagination').innerHTML = '';
       return;
     }
 
+    const typeTagColor = t => ({ REVENUE: 'tag-green', EXPENSE: 'tag-red', ASSET: 'tag-blue', LIABILITY: 'tag-yellow', EQUITY: 'tag-purple' }[t] || 'tag-gray');
     tbody.innerHTML = state.searchResults.map(r => `
       <tr style="cursor:pointer;" onclick="viewJournalEntry(${r.journal_entry_id || r.id})">
         <td><strong>${escHtml(r.entry_number || '')}</strong></td>
         <td>${fmtDate(r.entry_date)}</td>
         <td>${escHtml(r.account_name || '')}</td>
+        <td><span class="tag ${typeTagColor(r.account_type)}">${escHtml(r.account_type || '')}</span></td>
         <td>${escHtml(r.description || r.je_description || '')}</td>
         <td class="amount text-right">${parseFloat(r.debit_amount) > 0 ? fmtCurrency(parseFloat(r.debit_amount)) : ''}</td>
         <td class="amount text-right">${parseFloat(r.credit_amount) > 0 ? fmtCurrency(parseFloat(r.credit_amount)) : ''}</td>
