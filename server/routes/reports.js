@@ -1,5 +1,6 @@
 /**
  * SlickBooks Web - Financial Reports Routes
+ * Updated: CPA year-end adjustments applied
  */
 const router = require('express').Router();
 const { requireAuth } = require('../auth');
