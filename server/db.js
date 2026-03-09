@@ -208,6 +208,34 @@ async function initializeDatabase() {
       )
     `);
 
+    // Period Locks — prevent modifications to closed periods
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS period_locks (
+        id SERIAL PRIMARY KEY,
+        period_end DATE NOT NULL UNIQUE,
+        locked_at TIMESTAMPTZ DEFAULT NOW(),
+        locked_by INTEGER REFERENCES users(id),
+        notes TEXT
+      )
+    `);
+
+    // Audit Log — track all changes to journal entries
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id SERIAL PRIMARY KEY,
+        action VARCHAR(50) NOT NULL,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id INTEGER,
+        user_id INTEGER REFERENCES users(id),
+        old_data JSONB,
+        new_data JSONB,
+        ip_address VARCHAR(50),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC)`);
+
     // Create indexes for performance
     await client.query(`CREATE INDEX IF NOT EXISTS idx_line_items_je ON line_items(journal_entry_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_line_items_acct ON line_items(account_id)`);

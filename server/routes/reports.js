@@ -342,7 +342,7 @@ router.get('/reports/analytics', requireAuth, async (req, res) => {
 });
 
 // FLOFR Financial Statements (Florida Office of Financial Regulation)
-// Statement of Income + Balance Sheet — matches accountant's exact format
+// Statement of Income + Balance Sheet — matches CPA's exact format
 router.get('/reports/flofr', requireAuth, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -360,31 +360,57 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
     const totalExpenses = Math.round(expenses.reduce((s, a) => s + a.balance, 0) * 100) / 100;
     const netIncome = Math.round((totalRevenue - totalExpenses) * 100) / 100;
 
-    // Group expenses by category for FLOFR format
-    const expenseCategories = {};
-    for (const exp of expenses) {
-      const cat = exp.category || exp.account_name || 'Other Expenses';
-      if (!expenseCategories[cat]) expenseCategories[cat] = { accounts: [], total: 0 };
-      expenseCategories[cat].accounts.push(exp);
-      expenseCategories[cat].total += exp.balance;
+    // Group expenses into CPA-style categories for FLOFR format
+    // Maps account name patterns to CPA line items (ordered by typical CPA presentation)
+    const cpaCategoryRules = [
+      { label: 'Officer Salary',       pattern: /officer salary/i },
+      { label: 'Professional Fees',    pattern: /professional fee|accounting|legal|tax prep|cpa/i },
+      { label: 'Software Leases',      pattern: /software/i },
+      { label: 'Meals',                pattern: /meal|restaurant|dining/i },
+      { label: 'Taxes & Licenses',     pattern: /tax|license/i },
+      { label: 'Marketing',            pattern: /marketing|advertising|client hospitality|business gift/i },
+      { label: 'Auto Expenses',        pattern: /auto|vehicle|mileage/i },
+      { label: 'Telephone & Internet', pattern: /communi|internet|phone|wireless|web host|telecom/i },
+      { label: 'Office Expense',       pattern: /office supply|office expense|administrative|overhead/i },
+      { label: 'Insurance',            pattern: /insurance/i },
+      { label: 'Depreciation',         pattern: /depreciation/i },
+      { label: 'Bank & Wire Fees',     pattern: /bank|wire|finance charge|merchant|payment process/i },
+      { label: 'Rent',                 pattern: /rent|lease.*office/i },
+      { label: 'Research',             pattern: /research|education|training/i },
+    ];
+
+    const groupedExpenses = [];
+    const usedAccountIds = new Set();
+
+    for (const rule of cpaCategoryRules) {
+      const matching = expenses.filter(e => rule.pattern.test(e.account_name) && !usedAccountIds.has(e.id));
+      if (matching.length > 0) {
+        const total = Math.round(matching.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+        matching.forEach(m => usedAccountIds.add(m.id));
+        groupedExpenses.push({ label: rule.label, total, accounts: matching });
+      }
     }
-    for (const cat of Object.keys(expenseCategories)) {
-      expenseCategories[cat].total = Math.round(expenseCategories[cat].total * 100) / 100;
+
+    // Catch-all for anything not matched
+    const unmatched = expenses.filter(e => !usedAccountIds.has(e.id));
+    if (unmatched.length > 0) {
+      const total = Math.round(unmatched.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+      groupedExpenses.push({ label: 'Other Expenses', total, accounts: unmatched });
     }
+
+    // Sort by total descending
+    groupedExpenses.sort((a, b) => b.total - a.total);
 
     // ─── Balance Sheet ───
 
     // === Accounts Receivable: Management fees received in the FOLLOWING month ===
-    // e.g., for YE 12/31/2025, get January 2026 management fee revenue
     const endDate_ = new Date(end + 'T00:00:00');
     const nextMonthStart = new Date(endDate_.getFullYear(), endDate_.getMonth() + 1, 1);
     const nextMonthEnd = new Date(endDate_.getFullYear(), endDate_.getMonth() + 2, 0);
     const nextMonthStartStr = nextMonthStart.toISOString().split('T')[0];
     const nextMonthEndStr = nextMonthEnd.toISOString().split('T')[0];
 
-    // Get management fees for the following month
     const nextMonthRevenue = await getAccountTotals('REVENUE', nextMonthStartStr, nextMonthEndStr);
-    // Filter to only "Management Fees" account (or similar advisory fee accounts)
     const mgmtFeeNextMonth = nextMonthRevenue.filter(a =>
       /management fee|advisory fee|client fee/i.test(a.account_name)
     );
@@ -392,7 +418,6 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
 
     // === Cash and other current assets ===
     const allAssets = await getAccountBalances('ASSET', end);
-    // Separate cash/bank from equipment/other
     const cashAccounts = allAssets.filter(a =>
       /cash|bank|check|operat|money market|savings/i.test(a.account_name) &&
       !/receivable|equipment|furniture|deprec|intangible|amort/i.test(a.account_name)
@@ -423,11 +448,9 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
     );
     const totalLiabilities = Math.round(filteredLiabilities.reduce((s, a) => s + a.balance, 0) * 100) / 100;
 
-    // === Shareholders' Equity — use 2024 base, adjust with current year data ===
+    // === Shareholders' Equity with full retained earnings breakdown ===
     const allEquity = await getAccountBalances('EQUITY', end);
 
-    // Get 2024 base equity (prior year retained earnings)
-    // For the report year, prior year = yearNum - 1
     const priorYearEnd = `${yearNum - 1}-12-31`;
     const priorYearEquity = await getAccountBalances('EQUITY', priorYearEnd);
 
@@ -438,35 +461,26 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
       (priorYearRevenue.reduce((s, a) => s + a.balance, 0) - priorYearExpenses.reduce((s, a) => s + a.balance, 0)) * 100
     ) / 100;
 
-    // Common Stock and Paid-in-Capital: use current equity account balances
+    // Common Stock and Paid-in-Capital
     const commonStock = allEquity.filter(a => /common stock/i.test(a.account_name));
     const paidInCapital = allEquity.filter(a => /paid.in.capital|additional paid/i.test(a.account_name));
-    const retainedEarningsAcct = allEquity.filter(a => /retained earning/i.test(a.account_name));
     const ownerDistributions = allEquity.filter(a => /distribution|draw/i.test(a.account_name));
 
     const commonStockTotal = Math.round(commonStock.reduce((s, a) => s + a.balance, 0) * 100) / 100;
     const paidInCapitalTotal = Math.round(paidInCapital.reduce((s, a) => s + a.balance, 0) * 100) / 100;
 
     // Retained earnings = prior year retained earnings account balance + prior year net income
-    // Then current year adjustments: + current year net income - current year distributions
     const priorRetainedAcct = priorYearEquity.filter(a => /retained earning/i.test(a.account_name));
     const priorRetained = Math.round(priorRetainedAcct.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const beginningRetainedEarnings = Math.round((priorRetained + priorYearNetIncome) * 100) / 100;
 
-    // Base retained earnings from 2024: account balance + 2024 net income
-    const retainedEarningsBase = Math.round((priorRetained + priorYearNetIncome) * 100) / 100;
-
-    // Current year distributions
-    const currentYearDistributions = ownerDistributions.length > 0
-      ? Math.round(ownerDistributions.reduce((s, a) => s + Math.abs(a.balance), 0) * 100) / 100
-      : 0;
-
-    // Get only current year distributions (not all-time)
+    // Current year distributions (only for the report year)
     let currentYearDistAmount = 0;
     if (ownerDistributions.length > 0) {
       const distIds = ownerDistributions.map(a => a.id);
+      const currentYearEquityTotals = await getAccountTotals('EQUITY', start, end);
       for (const distId of distIds) {
-        const distTotals = await getAccountTotals('EQUITY', start, end);
-        const distAcct = distTotals.filter(a => a.id === distId);
+        const distAcct = currentYearEquityTotals.filter(a => a.id === distId);
         if (distAcct.length > 0) {
           currentYearDistAmount += Math.abs(distAcct[0].balance);
         }
@@ -474,10 +488,10 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
       currentYearDistAmount = Math.round(currentYearDistAmount * 100) / 100;
     }
 
-    // Final retained earnings = base (from 2024) + current year net income - current year distributions
-    const retainedEarnings = Math.round((retainedEarningsBase + netIncome - currentYearDistAmount) * 100) / 100;
+    // Ending retained earnings = beginning + net income - distributions
+    const endingRetainedEarnings = Math.round((beginningRetainedEarnings + netIncome - currentYearDistAmount) * 100) / 100;
 
-    const totalShareholdersEquity = Math.round((commonStockTotal + paidInCapitalTotal + retainedEarnings) * 100) / 100;
+    const totalShareholdersEquity = Math.round((commonStockTotal + paidInCapitalTotal + endingRetainedEarnings) * 100) / 100;
     const totalLiabAndEquity = Math.round((totalLiabilities + totalShareholdersEquity) * 100) / 100;
 
     res.json({
@@ -487,7 +501,11 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
         period: { startDate: start, endDate: end, year },
         statementOfIncome: {
           revenue: { accounts: revenue, total: totalRevenue },
-          expenses: { accounts: expenses, total: totalExpenses, categories: expenseCategories },
+          expenses: {
+            accounts: expenses,
+            total: totalExpenses,
+            grouped: groupedExpenses
+          },
           netIncome
         },
         balanceSheet: {
@@ -515,12 +533,13 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
           shareholdersEquity: {
             commonStock: commonStockTotal,
             paidInCapital: paidInCapitalTotal,
-            retainedEarnings,
+            retainedEarnings: endingRetainedEarnings,
             retainedEarningsDetail: {
-              priorYearBase: retainedEarningsBase,
-              priorYearLabel: `${yearNum - 1} base`,
+              beginningRetainedEarnings,
+              priorYearLabel: `Beginning Retained Earnings`,
               currentYearNetIncome: netIncome,
-              currentYearDistributions: currentYearDistAmount
+              currentYearDistributions: currentYearDistAmount,
+              endingRetainedEarnings
             },
             totalShareholdersEquity
           },

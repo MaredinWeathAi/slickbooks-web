@@ -467,4 +467,95 @@ router.post('/reconciliation/run', requireAuth, async (req, res) => {
   }
 });
 
+// ─── POST bulk recategorize: find similar transactions and update their account ───
+router.post('/reconciliation/bulk-recategorize', requireAuth, async (req, res) => {
+  try {
+    const { pattern, fromAccountId, toAccountId, matchType = 'contains', dryRun = false } = req.body;
+
+    if (!pattern || !toAccountId) {
+      return res.status(400).json({ success: false, error: 'pattern and toAccountId are required' });
+    }
+
+    // Build pattern match condition
+    let matchCondition;
+    const params = [];
+    if (matchType === 'exact') {
+      params.push(pattern);
+      matchCondition = `LOWER(COALESCE(je.description, '')) = LOWER($${params.length})`;
+    } else {
+      params.push(`%${pattern.toLowerCase()}%`);
+      matchCondition = `LOWER(COALESCE(je.description, '')) LIKE $${params.length}`;
+    }
+
+    // Optionally filter by source account
+    let fromCondition = '';
+    if (fromAccountId) {
+      params.push(parseInt(fromAccountId));
+      fromCondition = `AND li.account_id = $${params.length}`;
+    }
+
+    params.push(parseInt(toAccountId));
+    const toAcctParam = params.length;
+
+    // Find matching line items
+    const matchingSql = `
+      SELECT li.id as line_item_id, li.account_id, li.debit_amount, li.credit_amount, li.description as li_desc,
+             je.id as je_id, je.entry_number, je.entry_date, je.description as je_desc,
+             coa.account_name as current_account
+      FROM line_items li
+      JOIN journal_entries je ON li.journal_entry_id = je.id
+      JOIN chart_of_accounts coa ON li.account_id = coa.id
+      WHERE je.is_void = false
+        AND ${matchCondition}
+        ${fromCondition}
+        AND li.account_id != $${toAcctParam}
+      ORDER BY je.entry_date DESC
+    `;
+
+    const matches = await db.query(matchingSql, params);
+
+    if (dryRun) {
+      // Just return what would be changed
+      const targetAcct = await db.queryOne('SELECT account_name FROM chart_of_accounts WHERE id = $1', [toAccountId]);
+      return res.json({
+        success: true,
+        data: {
+          matchCount: matches.length,
+          targetAccount: targetAcct?.account_name || 'Unknown',
+          matches: matches.map(m => ({
+            entryNumber: m.entry_number,
+            date: m.entry_date,
+            description: m.je_desc,
+            currentAccount: m.current_account,
+            amount: parseFloat(m.debit_amount) > 0 ? parseFloat(m.debit_amount) : parseFloat(m.credit_amount)
+          }))
+        }
+      });
+    }
+
+    // Execute bulk update
+    let updated = 0;
+    for (const match of matches) {
+      await db.query('UPDATE line_items SET account_id = $1 WHERE id = $2', [toAccountId, match.line_item_id]);
+      updated++;
+    }
+
+    // Optionally create/update a category rule
+    const targetAcct = await db.queryOne('SELECT account_name FROM chart_of_accounts WHERE id = $1', [toAccountId]);
+
+    res.json({
+      success: true,
+      data: {
+        updated,
+        targetAccount: targetAcct?.account_name || 'Unknown',
+        pattern,
+        matchType
+      }
+    });
+  } catch (err) {
+    console.error('[Reconciliation] Bulk recategorize error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

@@ -560,6 +560,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
           Data Quality
         </div>
+        <div class="nav-link" onclick="switchView('admin')" data-view="admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          Period Locks
+        </div>
       </div>
     </nav>
 
@@ -748,7 +752,7 @@
           <div class="table-wrapper">
             <table class="data-table">
               <thead>
-                <tr><th>Entry #</th><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th class="text-right">Debit</th><th class="text-right">Credit</th></tr>
+                <tr><th>Entry #</th><th>Date</th><th>Account</th><th>Type</th><th>Description</th><th class="text-right">Debit</th><th class="text-right">Credit</th><th></th></tr>
               </thead>
               <tbody id="search-tbody"></tbody>
             </table>
@@ -1065,6 +1069,33 @@
           </div>
         </div>
 
+        <!-- ── Bulk Recategorize Tool ── -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Bulk Recategorize</div>
+          </div>
+          <div style="padding:12px 16px;background:var(--bg-secondary);border-bottom:1px solid var(--border);font-size:13px;color:var(--text-muted);">
+            Search for transactions by description and move them all to a new account at once.
+          </div>
+          <div style="padding:16px;">
+            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+              <div style="flex:2;min-width:180px;">
+                <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Search Pattern</label>
+                <input type="text" id="bulk-recat-pattern" placeholder="e.g. RMTLY, restaurant, AT&T..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);">
+              </div>
+              <div style="flex:2;min-width:180px;">
+                <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Move to Account</label>
+                <select id="bulk-recat-target" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);">
+                  <option value="">Select target account...</option>
+                </select>
+              </div>
+              <button class="btn" onclick="bulkRecatPreview()">Preview</button>
+              <button class="btn btn-primary" id="bulk-recat-apply-btn" onclick="bulkRecatApply()" style="display:none;">Apply Changes</button>
+            </div>
+            <div id="bulk-recat-results" style="margin-top:16px;display:none;"></div>
+          </div>
+        </div>
+
         <!-- ── Learned Rules Modal ── -->
         <div id="rules-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
           <div style="background:var(--bg-card);border-radius:12px;width:700px;max-height:80vh;overflow:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
@@ -1271,6 +1302,59 @@
                 <tbody id="dq-fix-tbody"></tbody>
               </table>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════ ADMIN: Period Locks & Audit Trail ═══════ -->
+      <div class="view" id="admin-view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Period Locks & Audit Trail</div>
+            <div class="page-subtitle">Lock accounting periods and review change history</div>
+          </div>
+        </div>
+
+        <!-- Period Locks -->
+        <div class="card" style="margin-bottom:24px;">
+          <div class="card-header">
+            <div class="card-title">Period Locks</div>
+          </div>
+          <div style="padding:12px 16px;background:var(--bg-secondary);border-bottom:1px solid var(--border);font-size:13px;color:var(--text-muted);">
+            Lock a period to prevent any modifications to journal entries on or before that date.
+          </div>
+          <div style="padding:16px;">
+            <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;">
+              <div>
+                <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Lock Through Date</label>
+                <input type="date" id="lock-period-date" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);">
+              </div>
+              <div style="flex:1;">
+                <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Notes (optional)</label>
+                <input type="text" id="lock-period-notes" placeholder="e.g. Year-end close 2025" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);">
+              </div>
+              <button class="btn btn-primary" onclick="createPeriodLock()">Lock Period</button>
+            </div>
+            <table class="data-table">
+              <thead><tr><th>Period Locked Through</th><th>Locked At</th><th>Notes</th><th></th></tr></thead>
+              <tbody id="period-locks-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Audit Trail -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Audit Trail</div>
+            <button class="btn btn-sm" onclick="loadAuditLog()">Refresh</button>
+          </div>
+          <div class="table-wrapper" style="max-height:500px;overflow:auto;">
+            <table class="data-table">
+              <thead><tr><th>Date/Time</th><th>Action</th><th>Entity</th><th>ID</th><th>Details</th></tr></thead>
+              <tbody id="audit-log-tbody">
+                <tr><td colspan="5" class="text-center text-muted" style="padding:20px;">Loading...</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -1597,7 +1681,8 @@
   }
   function fmtDate(d) {
     if (!d) return '';
-    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const str = String(d).substring(0, 10);
+    return new Date(str + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
   function fmtDateShort(d) {
     if (!d) return '';
@@ -1717,8 +1802,9 @@
     else if (view === 'fees') loadFeeHistory();
     else if (view === 'qbimport') {} // static view, no data load needed
     else if (view === 'dataquality') runDataQuality();
-    else if (view === 'reconciliation') runReconciliation();
+    else if (view === 'reconciliation') { runReconciliation(); populateBulkRecatAccounts(); }
     else if (view === 'invoices') loadInvoices();
+    else if (view === 'admin') { loadPeriodLocks(); loadAuditLog(); }
   };
 
   /* ── Load all accounts (for dropdowns) ──────────────── */
@@ -2498,21 +2584,22 @@
   function renderSearchResults() {
     const tbody = document.getElementById('search-tbody');
     if (state.searchResults.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:30px;">No results found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:30px;">No results found</td></tr>';
       document.getElementById('search-pagination').innerHTML = '';
       return;
     }
 
     const typeTagColor = t => ({ REVENUE: 'tag-green', EXPENSE: 'tag-red', ASSET: 'tag-blue', LIABILITY: 'tag-yellow', EQUITY: 'tag-purple' }[t] || 'tag-gray');
-    tbody.innerHTML = state.searchResults.map(r => `
-      <tr style="cursor:pointer;" onclick="viewJournalEntry(${r.journal_entry_id || r.id})">
-        <td><strong>${escHtml(r.entry_number || '')}</strong></td>
+    tbody.innerHTML = state.searchResults.map((r, idx) => `
+      <tr>
+        <td style="cursor:pointer;" onclick="viewJournalEntry(${r.journal_entry_id || r.id})"><strong>${escHtml(r.entry_number || '')}</strong></td>
         <td>${fmtDate(r.entry_date)}</td>
         <td>${escHtml(r.account_name || '')}</td>
         <td><span class="tag ${typeTagColor(r.account_type)}">${escHtml(r.account_type || '')}</span></td>
         <td>${escHtml(r.description || r.je_description || '')}</td>
         <td class="amount text-right">${parseFloat(r.debit_amount) > 0 ? fmtCurrency(parseFloat(r.debit_amount)) : ''}</td>
         <td class="amount text-right">${parseFloat(r.credit_amount) > 0 ? fmtCurrency(parseFloat(r.credit_amount)) : ''}</td>
+        <td style="width:40px;"><button class="btn btn-sm" onclick="quickEditSearchItem(${idx})" title="Quick edit this line item">Edit</button></td>
       </tr>
     `).join('');
 
@@ -2529,6 +2616,67 @@
   window.searchPageChange = function(page) {
     state.searchPage = page;
     runSearch(false);
+  };
+
+  /* ── Quick Edit from Search Results ──────────────────── */
+  window.quickEditSearchItem = function(idx) {
+    const r = state.searchResults[idx];
+    if (!r) return;
+
+    const lineItemId = r.line_item_id || r.id;
+    const jeId = r.journal_entry_id || r.id;
+    const accounts = state.accountsList || [];
+    const accountOptions = accounts
+      .sort((a, b) => (a.account_name || '').localeCompare(b.account_name || ''))
+      .map(a => `<option value="${a.id}" ${a.id == r.account_id ? 'selected' : ''}>${escHtml(a.account_name)} (${a.account_type})</option>`)
+      .join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'quick-edit-modal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:var(--bg-card);border-radius:12px;width:500px;max-width:90vw;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h3 style="margin:0;">Edit Line Item</h3>
+          <button class="btn btn-sm" onclick="document.getElementById('quick-edit-modal').remove()">Close</button>
+        </div>
+        <div style="margin-bottom:16px;padding:12px;background:var(--bg-secondary);border-radius:var(--radius-sm);font-size:13px;">
+          <div><strong>${escHtml(r.entry_number || '')}</strong> — ${fmtDate(r.entry_date)}</div>
+          <div style="margin-top:4px;">${escHtml(r.description || r.je_description || '')}</div>
+          <div style="margin-top:4px;">Amount: ${parseFloat(r.debit_amount) > 0 ? 'DR ' + fmtCurrency(parseFloat(r.debit_amount)) : 'CR ' + fmtCurrency(parseFloat(r.credit_amount))}</div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Account</label>
+          <select id="quick-edit-account" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);">
+            ${accountOptions}
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn" onclick="document.getElementById('quick-edit-modal').remove()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveQuickEdit(${lineItemId}, ${jeId}, ${idx})">Save</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  };
+
+  window.saveQuickEdit = async function(lineItemId, jeId, idx) {
+    const newAccountId = document.getElementById('quick-edit-account').value;
+    if (!newAccountId) return;
+
+    try {
+      // Use the categorize endpoint to update the line item's account
+      await api('/api/reconciliation/categorize', {
+        method: 'POST',
+        body: { lineItemId, newAccountId: parseInt(newAccountId), learnRule: false }
+      });
+      toast('Line item updated', 'success');
+      document.getElementById('quick-edit-modal').remove();
+      // Refresh search results
+      runSearch(false);
+    } catch (err) {
+      toast('Update failed: ' + err.message, 'error');
+    }
   };
 
   /* ── Reports ────────────────────────────────────────── */
@@ -2826,48 +2974,42 @@
     output.innerHTML = html;
   }
 
-  /* ── FLOFR Financial Statements Renderer (matches accountant format) ── */
+  /* ── FLOFR Financial Statements Renderer (matches CPA format) ── */
   function renderFLOFRStatements(d) {
     const output = document.getElementById('report-output');
     const period = d.period;
     const inc = d.statementOfIncome;
     const bs = d.balanceSheet;
+    const reDetail = bs.shareholdersEquity.retainedEarningsDetail;
 
-    // Date formatting for header
+    // Date formatting
     const endDateObj = new Date(period.endDate + 'T00:00:00');
     const reportDateStr = endDateObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
-
-    // Period string for Statement of Income
     const periodEndStr = endDateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const fmtPeriod = `For the Year Ended ${periodEndStr}`;
+    const asOfStr = `As of ${endDateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+    const startDateObj = new Date(period.startDate + 'T00:00:00');
+    const incPeriodStr = `${startDateObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} - ${endDateObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}`;
 
-    // Build expense rows grouped by category (matching accountant format: one line per expense)
-    const categories = inc.expenses.categories || {};
+    // Build grouped expense rows (one line per CPA category)
+    const grouped = inc.expenses.grouped || [];
     let expenseRows = '';
-    const sortedCats = Object.entries(categories).sort((a, b) => b[1].total - a[1].total);
-    for (const [catName, catData] of sortedCats) {
-      if (catData.accounts.length === 1) {
-        expenseRows += `<tr><td style="padding-left:80px;">${escHtml(catData.accounts[0].account_name)}</td><td class="amount text-right">${fmtCurrency(catData.total)}</td></tr>`;
-      } else {
-        for (const a of catData.accounts) {
-          expenseRows += `<tr><td style="padding-left:80px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>`;
-        }
-      }
+    for (const g of grouped) {
+      expenseRows += `<tr><td style="padding:3px 0 3px 40px;">${escHtml(g.label)}</td><td class="amount text-right" style="padding:3px 0;">${fmtCurrency(g.total)}</td></tr>`;
     }
 
     // Liability rows
     const liabRows = bs.currentLiabilities.accounts.length > 0
       ? bs.currentLiabilities.accounts.map(a =>
-          `<tr><td style="padding-left:40px;">${escHtml(a.account_name)}</td><td class="amount text-right">${fmtCurrency(a.balance)}</td></tr>`
+          `<tr><td style="padding:4px 0 4px 40px;">${escHtml(a.account_name)}</td><td class="amount text-right" style="padding:4px 0;">${fmtCurrency(a.balance)}</td></tr>`
         ).join('')
-      : `<tr><td style="padding-left:40px;">Accounts Payable and Accrued Expenses</td><td class="amount text-right">$0.00</td></tr>`;
+      : `<tr><td style="padding:4px 0 4px 40px;">Accounts Payable and Accrued Expenses</td><td class="amount text-right" style="padding:4px 0;">$0.00</td></tr>`;
 
     output.innerHTML = `
       <div id="flofr-report-content" style="max-width:650px;margin:0 auto;font-family:'Inter',sans-serif;">
 
         <!-- ═══════ PAGE 1: STATEMENT OF INCOME ═══════ -->
         <div style="margin-bottom:60px;">
-          <!-- Header with logo area -->
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;padding-bottom:12px;border-bottom:2px solid #333;">
             <div>
               <div style="font-size:20px;font-weight:700;letter-spacing:-0.5px;">Maredin</div>
@@ -2876,15 +3018,14 @@
             <div style="font-size:13px;color:var(--text-secondary);">${reportDateStr}</div>
           </div>
 
-          <h3 style="text-align:center;margin-bottom:28px;font-size:15px;font-weight:700;text-decoration:underline;">Statement of Income</h3>
+          <h3 style="text-align:center;margin-bottom:4px;font-size:15px;font-weight:700;text-decoration:underline;">Statement of Income</h3>
+          <div style="text-align:center;font-size:12px;color:var(--text-secondary);margin-bottom:24px;">${fmtPeriod}</div>
 
           <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <tbody>
-              <!-- Revenue -->
               <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Revenue</td><td class="amount text-right" style="padding:6px 0;width:120px;font-weight:600;">${fmtCurrency(inc.revenue.total)}</td></tr>
               <tr><td colspan="2" style="height:16px;"></td></tr>
 
-              <!-- Expenses -->
               <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Expenses</td><td></td></tr>
               ${expenseRows}
               <tr><td colspan="2" style="height:8px;"></td></tr>
@@ -2894,7 +3035,6 @@
               </tr>
               <tr><td colspan="2" style="height:16px;"></td></tr>
 
-              <!-- Net Income -->
               <tr style="border-top:2px solid #333;">
                 <td style="padding:10px 0;font-weight:700;">Net Income</td>
                 <td class="amount text-right" style="padding:10px 0;font-weight:700;border-top:2px solid #333;text-decoration:underline;${inc.netIncome >= 0 ? '' : 'color:var(--danger);'}">${fmtCurrency(inc.netIncome)}</td>
@@ -2905,7 +3045,8 @@
 
         <!-- ═══════ PAGE 2: BALANCE SHEET ═══════ -->
         <div style="margin-bottom:60px;page-break-before:always;">
-          <h3 style="text-align:center;margin-bottom:28px;font-size:15px;font-weight:700;text-decoration:underline;">Balance Sheet</h3>
+          <h3 style="text-align:center;margin-bottom:4px;font-size:15px;font-weight:700;text-decoration:underline;">Balance Sheet</h3>
+          <div style="text-align:center;font-size:12px;color:var(--text-secondary);margin-bottom:24px;">${asOfStr}</div>
 
           <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <tbody>
@@ -2935,8 +3076,9 @@
               <tr><td colspan="2" style="height:12px;"></td></tr>
 
               <!-- Intangible Assets -->
+              ${bs.intangibleAssets > 0 ? `
               <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Intangible Assets Less Accumulated Amortization</td><td class="amount text-right" style="padding:6px 0;">${fmtCurrency(bs.intangibleAssets)}</td></tr>
-              <tr><td colspan="2" style="height:8px;"></td></tr>
+              <tr><td colspan="2" style="height:8px;"></td></tr>` : ''}
 
               <!-- Total Assets -->
               <tr style="border-top:2px solid #333;">
@@ -2954,12 +3096,23 @@
               </tr>
               <tr><td colspan="2" style="height:16px;"></td></tr>
 
-              <!-- Shareholders Equity -->
+              <!-- Shareholders Equity with full RE breakdown -->
               <tr><td style="padding:6px 0;font-weight:700;text-decoration:underline;">Shareholders Equity</td><td></td></tr>
               <tr><td style="padding:4px 0 4px 40px;">Common Stock, No Par Value; 1,000 Shares Authorized</td><td class="amount text-right" style="padding:4px 0;">${fmtCurrency(bs.shareholdersEquity.commonStock)}</td></tr>
               <tr><td style="padding:4px 0 4px 40px;">Paid-in-Capital</td><td class="amount text-right" style="padding:4px 0;">${fmtCurrency(bs.shareholdersEquity.paidInCapital)}</td></tr>
-              <tr><td style="padding:4px 0 4px 40px;">Retained Earnings</td><td class="amount text-right" style="padding:4px 0;">${fmtCurrency(bs.shareholdersEquity.retainedEarnings)}</td></tr>
+              <tr><td colspan="2" style="height:6px;"></td></tr>
+
+              <!-- Retained Earnings Detail -->
+              <tr><td style="padding:4px 0 4px 40px;font-weight:600;">Retained Earnings:</td><td></td></tr>
+              <tr><td style="padding:3px 0 3px 70px;">Beginning Retained Earnings</td><td class="amount text-right" style="padding:3px 0;">${fmtCurrency(reDetail.beginningRetainedEarnings)}</td></tr>
+              <tr><td style="padding:3px 0 3px 70px;">Add: Current Year Net Income</td><td class="amount text-right" style="padding:3px 0;">${fmtCurrency(reDetail.currentYearNetIncome)}</td></tr>
+              <tr><td style="padding:3px 0 3px 70px;">Less: Current Year Distributions</td><td class="amount text-right" style="padding:3px 0;">(${fmtCurrency(reDetail.currentYearDistributions)})</td></tr>
+              <tr style="border-top:1px solid #ccc;">
+                <td style="padding:4px 0 4px 70px;font-weight:600;">Ending Retained Earnings</td>
+                <td class="amount text-right" style="padding:4px 0;font-weight:600;border-top:1px solid #ccc;">${fmtCurrency(reDetail.endingRetainedEarnings)}</td>
+              </tr>
               <tr><td colspan="2" style="height:8px;"></td></tr>
+
               <tr style="border-top:1px solid #999;">
                 <td style="padding:8px 0;font-weight:700;">Total Shareholders Equity</td>
                 <td class="amount text-right" style="padding:8px 0;font-weight:600;border-top:1px solid #999;">${fmtCurrency(bs.shareholdersEquity.totalShareholdersEquity)}</td>
@@ -2994,7 +3147,7 @@
 
             <div style="margin-top:32px;line-height:1.8;">
               <div>Sworn to (or affirmed) and subscribed before me by means of () Physical presence or ()
-              online notarization, this ___ Day of __________, ${period.year + 1 || new Date().getFullYear()} by</div>
+              online notarization, this ___ Day of __________, ${parseInt(period.year) + 1 || new Date().getFullYear()} by</div>
             </div>
 
             <div style="margin-top:40px;">
@@ -4052,7 +4205,175 @@
     }
   };
 
+  /* ── Bulk Recategorization ──────────────────────────── */
+  window.bulkRecatPreview = async function() {
+    const pattern = document.getElementById('bulk-recat-pattern').value.trim();
+    const toAccountId = document.getElementById('bulk-recat-target').value;
+    if (!pattern) { toast('Enter a search pattern', 'error'); return; }
+    if (!toAccountId) { toast('Select a target account', 'error'); return; }
+
+    try {
+      const result = await api('/api/reconciliation/bulk-recategorize', {
+        method: 'POST',
+        body: { pattern, toAccountId: parseInt(toAccountId), dryRun: true }
+      });
+      const d = result.data;
+      const resultsDiv = document.getElementById('bulk-recat-results');
+      resultsDiv.style.display = 'block';
+
+      if (d.matchCount === 0) {
+        resultsDiv.innerHTML = '<div style="color:var(--text-muted);padding:8px;">No matching transactions found.</div>';
+        document.getElementById('bulk-recat-apply-btn').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('bulk-recat-apply-btn').style.display = '';
+      resultsDiv.innerHTML = `
+        <div style="margin-bottom:12px;font-weight:600;">${d.matchCount} transaction(s) will be moved to <span style="color:var(--accent);">${escHtml(d.targetAccount)}</span></div>
+        <div class="table-wrapper" style="max-height:300px;overflow:auto;">
+          <table class="data-table" style="font-size:12px;">
+            <thead><tr><th>Entry #</th><th>Date</th><th>Description</th><th>Current Account</th><th class="text-right">Amount</th></tr></thead>
+            <tbody>
+              ${d.matches.map(m => `
+                <tr>
+                  <td>${escHtml(m.entryNumber || '')}</td>
+                  <td>${fmtDate(m.date)}</td>
+                  <td>${escHtml(m.description || '')}</td>
+                  <td>${escHtml(m.currentAccount || '')}</td>
+                  <td class="amount text-right">${fmtCurrency(m.amount)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } catch (err) {
+      toast('Preview failed: ' + err.message, 'error');
+    }
+  };
+
+  window.bulkRecatApply = async function() {
+    const pattern = document.getElementById('bulk-recat-pattern').value.trim();
+    const toAccountId = document.getElementById('bulk-recat-target').value;
+    if (!pattern || !toAccountId) return;
+
+    if (!confirm(`Apply bulk recategorization for "${pattern}"? This will update all matching transactions.`)) return;
+
+    try {
+      const result = await api('/api/reconciliation/bulk-recategorize', {
+        method: 'POST',
+        body: { pattern, toAccountId: parseInt(toAccountId), dryRun: false }
+      });
+      toast(`Updated ${result.data.updated} transaction(s) to ${result.data.targetAccount}`, 'success');
+      document.getElementById('bulk-recat-results').style.display = 'none';
+      document.getElementById('bulk-recat-apply-btn').style.display = 'none';
+      document.getElementById('bulk-recat-pattern').value = '';
+    } catch (err) {
+      toast('Bulk recategorize failed: ' + err.message, 'error');
+    }
+  };
+
+  // Populate bulk recat target account dropdown when reconciliation view loads
+  function populateBulkRecatAccounts() {
+    const select = document.getElementById('bulk-recat-target');
+    if (!select || !state.accountsList) return;
+    select.innerHTML = '<option value="">Select target account...</option>' +
+      state.accountsList
+        .filter(a => a.account_type === 'EXPENSE' || a.account_type === 'ASSET' || a.account_type === 'LIABILITY')
+        .sort((a, b) => (a.account_name || '').localeCompare(b.account_name || ''))
+        .map(a => `<option value="${a.id}">${escHtml(a.account_name)} (${a.account_type})</option>`).join('');
+  }
+
   /* ── Data Quality Functions ────────────────────────── */
+  /* ── Period Locks & Audit Trail ─────────────────────── */
+  window.createPeriodLock = async function() {
+    const periodEnd = document.getElementById('lock-period-date').value;
+    const notes = document.getElementById('lock-period-notes').value.trim();
+    if (!periodEnd) { toast('Select a date', 'error'); return; }
+    if (!confirm(`Lock all periods through ${periodEnd}? Entries on or before this date will be read-only.`)) return;
+    try {
+      await api('/api/period-locks', { method: 'POST', body: { periodEnd, notes } });
+      toast('Period locked', 'success');
+      document.getElementById('lock-period-date').value = '';
+      document.getElementById('lock-period-notes').value = '';
+      loadPeriodLocks();
+    } catch (err) {
+      toast('Failed: ' + err.message, 'error');
+    }
+  };
+
+  window.deletePeriodLock = async function(id) {
+    if (!confirm('Remove this period lock? This will allow modifications to entries in this period.')) return;
+    try {
+      await api('/api/period-locks/' + id, { method: 'DELETE' });
+      toast('Period unlocked', 'success');
+      loadPeriodLocks();
+    } catch (err) {
+      toast('Failed: ' + err.message, 'error');
+    }
+  };
+
+  async function loadPeriodLocks() {
+    try {
+      const result = await api('/api/period-locks');
+      const locks = result.data || [];
+      const tbody = document.getElementById('period-locks-tbody');
+      if (locks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:16px;">No periods locked</td></tr>';
+        return;
+      }
+      tbody.innerHTML = locks.map(l => `
+        <tr>
+          <td><strong>${fmtDate(l.period_end)}</strong></td>
+          <td>${new Date(l.locked_at).toLocaleString()}</td>
+          <td class="text-muted">${escHtml(l.notes || '-')}</td>
+          <td><button class="btn btn-sm" style="color:var(--danger);" onclick="deletePeriodLock(${l.id})">Unlock</button></td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      console.error('Load period locks:', err);
+    }
+  }
+
+  async function loadAuditLog() {
+    try {
+      const result = await api('/api/audit-log?limit=200');
+      const logs = result.data || [];
+      const tbody = document.getElementById('audit-log-tbody');
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding:16px;">No audit records</td></tr>';
+        return;
+      }
+      tbody.innerHTML = logs.map(l => {
+        const actionColor = { CREATE: 'tag-green', UPDATE: 'tag-blue', VOID: 'tag-red', LOCK_PERIOD: 'tag-yellow', UNLOCK_PERIOD: 'tag-yellow' }[l.action] || 'tag-gray';
+        let detail = '';
+        if (l.new_data) {
+          const d = typeof l.new_data === 'string' ? JSON.parse(l.new_data) : l.new_data;
+          detail = d.entry_number || d.description || d.period_end || '';
+        }
+        return `<tr>
+          <td style="font-size:12px;">${new Date(l.created_at).toLocaleString()}</td>
+          <td><span class="tag ${actionColor}">${escHtml(l.action)}</span></td>
+          <td>${escHtml(l.entity_type)}</td>
+          <td>${l.entity_id || '-'}</td>
+          <td class="text-muted" style="font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;">${escHtml(detail)}</td>
+        </tr>`;
+      }).join('');
+    } catch (err) {
+      console.error('Load audit log:', err);
+    }
+  }
+
+  // Load when admin view is shown
+  const origSwitchView = window.switchView;
+  // Hook into view switch for admin panel
+  const adminViewHook = () => {
+    if (state.currentView === 'admin') {
+      loadPeriodLocks();
+      loadAuditLog();
+    }
+  };
+
   window.runDataQuality = async function() {
     const loading = document.getElementById('dq-loading');
     const results = document.getElementById('dq-results');

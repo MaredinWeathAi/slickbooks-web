@@ -1,9 +1,31 @@
 /**
  * SlickBooks Web - Journal Entry Routes
+ * Includes period locking, double-entry validation, and audit trail
  */
 const router = require('express').Router();
 const { requireAuth } = require('../auth');
 const db = require('../db');
+
+// Helper: Check if a date falls within a locked period
+async function isDateLocked(date) {
+  const lock = await db.queryOne(
+    'SELECT id, period_end FROM period_locks WHERE period_end >= $1 ORDER BY period_end LIMIT 1',
+    [date]
+  );
+  return lock ? lock.period_end : null;
+}
+
+// Helper: Log audit trail
+async function logAudit(action, entityType, entityId, oldData, newData, userId) {
+  try {
+    await db.query(
+      'INSERT INTO audit_log (action, entity_type, entity_id, old_data, new_data, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
+      [action, entityType, entityId, oldData ? JSON.stringify(oldData) : null, newData ? JSON.stringify(newData) : null, userId || null]
+    );
+  } catch (e) {
+    console.error('[Audit] Failed to log:', e.message);
+  }
+}
 
 // GET journal entries (paginated)
 router.get('/journal-entries', requireAuth, async (req, res) => {
@@ -114,11 +136,17 @@ router.post('/journal-entries', requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Date and at least 1 line item required' });
     }
 
-    // Validate balanced
+    // Period lock check
+    const lockedUntil = await isDateLocked(entry_date);
+    if (lockedUntil) {
+      return res.status(403).json({ success: false, error: `Period is locked through ${lockedUntil}. Cannot create entries in a closed period.` });
+    }
+
+    // Double-entry validation: debits must equal credits
     const totalDebits = line_items.reduce((s, li) => s + (parseFloat(li.debit_amount) || 0), 0);
     const totalCredits = line_items.reduce((s, li) => s + (parseFloat(li.credit_amount) || 0), 0);
     if (Math.abs(totalDebits - totalCredits) > 0.01) {
-      return res.status(400).json({ success: false, error: `Entry not balanced: debits ${totalDebits} != credits ${totalCredits}` });
+      return res.status(400).json({ success: false, error: `Entry not balanced: debits $${totalDebits.toFixed(2)} != credits $${totalCredits.toFixed(2)}` });
     }
 
     // Generate entry number
@@ -144,6 +172,9 @@ router.post('/journal-entries', requireAuth, async (req, res) => {
       );
     }
 
+    // Audit trail
+    await logAudit('CREATE', 'journal_entry', entry.id, null, { entry_number: entryNumber, entry_date, description, line_items }, req.session?.userId);
+
     res.json({ success: true, data: entry });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -157,6 +188,25 @@ router.put('/journal-entries/:id', requireAuth, async (req, res) => {
 
     const existing = await db.queryOne('SELECT * FROM journal_entries WHERE id = $1', [req.params.id]);
     if (!existing) return res.status(404).json({ success: false, error: 'Entry not found' });
+
+    // Period lock check (check both existing and new date)
+    const checkDate = entry_date || existing.entry_date;
+    const lockedUntil = await isDateLocked(typeof checkDate === 'string' ? checkDate : checkDate.toISOString().split('T')[0]);
+    if (lockedUntil) {
+      return res.status(403).json({ success: false, error: `Period is locked through ${lockedUntil}. Cannot modify entries in a closed period.` });
+    }
+
+    // Double-entry validation if line items are being replaced
+    if (line_items && line_items.length > 0) {
+      const totalDebits = line_items.reduce((s, li) => s + (parseFloat(li.debit_amount) || 0), 0);
+      const totalCredits = line_items.reduce((s, li) => s + (parseFloat(li.credit_amount) || 0), 0);
+      if (Math.abs(totalDebits - totalCredits) > 0.01) {
+        return res.status(400).json({ success: false, error: `Entry not balanced: debits $${totalDebits.toFixed(2)} != credits $${totalCredits.toFixed(2)}` });
+      }
+    }
+
+    // Save old state for audit
+    const oldLines = await db.query('SELECT * FROM line_items WHERE journal_entry_id = $1', [req.params.id]);
 
     await db.query(
       `UPDATE journal_entries SET
@@ -182,17 +232,96 @@ router.put('/journal-entries/:id', requireAuth, async (req, res) => {
     }
 
     const updated = await db.queryOne('SELECT * FROM journal_entries WHERE id = $1', [req.params.id]);
+    await logAudit('UPDATE', 'journal_entry', parseInt(req.params.id),
+      { ...existing, line_items: oldLines },
+      { ...updated, line_items: line_items || oldLines },
+      req.session?.userId
+    );
+
     res.json({ success: true, data: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// DELETE (void) journal entry
+// DELETE (void) journal entry — immutable: voids rather than deletes
 router.delete('/journal-entries/:id', requireAuth, async (req, res) => {
   try {
+    const existing = await db.queryOne('SELECT * FROM journal_entries WHERE id = $1', [req.params.id]);
+    if (!existing) return res.status(404).json({ success: false, error: 'Entry not found' });
+
+    // Period lock check
+    const entryDate = typeof existing.entry_date === 'string' ? existing.entry_date : existing.entry_date.toISOString().split('T')[0];
+    const lockedUntil = await isDateLocked(entryDate);
+    if (lockedUntil) {
+      return res.status(403).json({ success: false, error: `Period is locked through ${lockedUntil}. Cannot void entries in a closed period.` });
+    }
+
     await db.query('UPDATE journal_entries SET is_void = true, voided_at = NOW(), updated_at = NOW() WHERE id = $1', [req.params.id]);
+    await logAudit('VOID', 'journal_entry', parseInt(req.params.id), existing, null, req.session?.userId);
+
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Period Locks ───
+router.get('/period-locks', requireAuth, async (req, res) => {
+  try {
+    const locks = await db.query('SELECT * FROM period_locks ORDER BY period_end DESC');
+    res.json({ success: true, data: locks });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/period-locks', requireAuth, async (req, res) => {
+  try {
+    const { periodEnd, notes } = req.body;
+    if (!periodEnd) return res.status(400).json({ success: false, error: 'periodEnd is required' });
+    const lock = await db.queryOne(
+      'INSERT INTO period_locks (period_end, locked_by, notes) VALUES ($1, $2, $3) RETURNING *',
+      [periodEnd, req.session?.userId || null, notes || null]
+    );
+    await logAudit('LOCK_PERIOD', 'period_lock', lock.id, null, { period_end: periodEnd }, req.session?.userId);
+    res.json({ success: true, data: lock });
+  } catch (err) {
+    if (err.message.includes('duplicate')) {
+      return res.status(400).json({ success: false, error: 'This period is already locked' });
+    }
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.delete('/period-locks/:id', requireAuth, async (req, res) => {
+  try {
+    const lock = await db.queryOne('SELECT * FROM period_locks WHERE id = $1', [req.params.id]);
+    if (!lock) return res.status(404).json({ success: false, error: 'Lock not found' });
+    await db.query('DELETE FROM period_locks WHERE id = $1', [req.params.id]);
+    await logAudit('UNLOCK_PERIOD', 'period_lock', parseInt(req.params.id), lock, null, req.session?.userId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Audit Log ───
+router.get('/audit-log', requireAuth, async (req, res) => {
+  try {
+    const { limit = 100, entityType, entityId } = req.query;
+    let sql = 'SELECT * FROM audit_log';
+    const params = [];
+    const conditions = [];
+
+    if (entityType) { params.push(entityType); conditions.push(`entity_type = $${params.length}`); }
+    if (entityId) { params.push(parseInt(entityId)); conditions.push(`entity_id = $${params.length}`); }
+    if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY created_at DESC';
+    params.push(parseInt(limit)); sql += ` LIMIT $${params.length}`;
+
+    const logs = await db.query(sql, params);
+    res.json({ success: true, data: logs });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -202,7 +331,7 @@ router.delete('/journal-entries/:id', requireAuth, async (req, res) => {
 router.post('/journal-entries/search', requireAuth, async (req, res) => {
   try {
     const { query: searchQuery, accountId, startDate, endDate, limit = 100, offset = 0 } = req.body;
-    let sql = `SELECT je.*, li.account_id, li.debit_amount, li.credit_amount, li.description as line_description,
+    let sql = `SELECT je.*, li.id as line_item_id, li.account_id, li.debit_amount, li.credit_amount, li.description as line_description,
       coa.account_name, coa.account_number, coa.account_type
       FROM journal_entries je
       JOIN line_items li ON li.journal_entry_id = je.id
@@ -237,7 +366,15 @@ router.post('/journal-entries/search', requireAuth, async (req, res) => {
     params.push(parseInt(offset)); sql += ` OFFSET $${params.length}`;
 
     const results = await db.query(sql, params);
-    res.json({ success: true, data: { results, total: results.length } });
+    // Get actual total count (without limit/offset) for pagination
+    const countSql = sql.replace(/SELECT .* FROM/, 'SELECT COUNT(*) as count FROM').replace(/ ORDER BY.*$/, '').replace(/ LIMIT.*$/, '').replace(/ OFFSET.*$/, '');
+    let total = results.length;
+    try {
+      const countParams = params.slice(0, -2); // Remove limit & offset params
+      const countResult = await db.query(countSql, countParams);
+      total = parseInt(countResult[0]?.count || results.length);
+    } catch(e) { /* fallback to results.length */ }
+    res.json({ success: true, data: { results, total } });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
