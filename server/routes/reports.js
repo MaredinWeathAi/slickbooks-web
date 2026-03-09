@@ -375,8 +375,7 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
       { label: 'Insurance',            pattern: /insurance/i },
       { label: 'Depreciation',         pattern: /depreciation/i },
       { label: 'Bank & Wire Fees',     pattern: /bank|wire|finance charge|merchant|payment process/i },
-      { label: 'Rent',                 pattern: /rent|lease.*office/i },
-      { label: 'Research',             pattern: /research|education|training/i },
+      { label: 'Rent',                 pattern: /\brent\b|lease.*office/i },
     ];
 
     const groupedExpenses = [];
@@ -403,21 +402,15 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
 
     // ─── Balance Sheet ───
 
-    // === Accounts Receivable: Management fees received in the FOLLOWING month ===
-    const endDate_ = new Date(end + 'T00:00:00');
-    const nextMonthStart = new Date(endDate_.getFullYear(), endDate_.getMonth() + 1, 1);
-    const nextMonthEnd = new Date(endDate_.getFullYear(), endDate_.getMonth() + 2, 0);
-    const nextMonthStartStr = nextMonthStart.toISOString().split('T')[0];
-    const nextMonthEndStr = nextMonthEnd.toISOString().split('T')[0];
-
-    const nextMonthRevenue = await getAccountTotals('REVENUE', nextMonthStartStr, nextMonthEndStr);
-    const mgmtFeeNextMonth = nextMonthRevenue.filter(a =>
-      /management fee|advisory fee|client fee/i.test(a.account_name)
+    // === Accounts Receivable: from AR account balance ===
+    const allAssetsFull = await getAccountBalances('ASSET', end);
+    const arAccounts = allAssetsFull.filter(a =>
+      /receivable/i.test(a.account_name)
     );
-    const accountsReceivable = Math.round(mgmtFeeNextMonth.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const accountsReceivable = Math.round(arAccounts.reduce((s, a) => s + a.balance, 0) * 100) / 100;
 
     // === Cash and other current assets ===
-    const allAssets = await getAccountBalances('ASSET', end);
+    const allAssets = allAssetsFull;
     const cashAccounts = allAssets.filter(a =>
       /cash|bank|check|operat|money market|savings/i.test(a.account_name) &&
       !/receivable|equipment|furniture|deprec|intangible|amort/i.test(a.account_name)
@@ -441,25 +434,13 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
     const totalIntangibles = Math.round(intangibleAccounts.reduce((s, a) => s + a.balance, 0) * 100) / 100;
     const totalAssets = Math.round((totalCurrentAssets + netEquipment + totalIntangibles) * 100) / 100;
 
-    // === Liabilities — Eliminate "Loan Payable" (old data) ===
+    // === Liabilities ===
     const allLiabilities = await getAccountBalances('LIABILITY', end);
-    const filteredLiabilities = allLiabilities.filter(a =>
-      !/loan payable/i.test(a.account_name)
-    );
+    const filteredLiabilities = allLiabilities.filter(a => a.balance > 0);
     const totalLiabilities = Math.round(filteredLiabilities.reduce((s, a) => s + a.balance, 0) * 100) / 100;
 
     // === Shareholders' Equity with full retained earnings breakdown ===
     const allEquity = await getAccountBalances('EQUITY', end);
-
-    const priorYearEnd = `${yearNum - 1}-12-31`;
-    const priorYearEquity = await getAccountBalances('EQUITY', priorYearEnd);
-
-    // Prior year net income (for retained earnings calc)
-    const priorYearRevenue = await getAccountTotals('REVENUE', `${yearNum - 1}-01-01`, priorYearEnd);
-    const priorYearExpenses = await getAccountTotals('EXPENSE', `${yearNum - 1}-01-01`, priorYearEnd);
-    const priorYearNetIncome = Math.round(
-      (priorYearRevenue.reduce((s, a) => s + a.balance, 0) - priorYearExpenses.reduce((s, a) => s + a.balance, 0)) * 100
-    ) / 100;
 
     // Common Stock and Paid-in-Capital
     const commonStock = allEquity.filter(a => /common stock/i.test(a.account_name));
@@ -469,10 +450,10 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
     const commonStockTotal = Math.round(commonStock.reduce((s, a) => s + a.balance, 0) * 100) / 100;
     const paidInCapitalTotal = Math.round(paidInCapital.reduce((s, a) => s + a.balance, 0) * 100) / 100;
 
-    // Retained earnings = prior year retained earnings account balance + prior year net income
-    const priorRetainedAcct = priorYearEquity.filter(a => /retained earning/i.test(a.account_name));
-    const priorRetained = Math.round(priorRetainedAcct.reduce((s, a) => s + a.balance, 0) * 100) / 100;
-    const beginningRetainedEarnings = Math.round((priorRetained + priorYearNetIncome) * 100) / 100;
+    // Beginning Retained Earnings = Retained Earnings account balance as of report period end
+    // (The RE account balance reflects CPA-adjusted beginning retained earnings via AJEs)
+    const retainedEarningsAcct = allEquity.filter(a => /retained earning/i.test(a.account_name));
+    const beginningRetainedEarnings = Math.round(retainedEarningsAcct.reduce((s, a) => s + a.balance, 0) * 100) / 100;
 
     // Current year distributions (only for the report year)
     let currentYearDistAmount = 0;
@@ -511,7 +492,6 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
         balanceSheet: {
           currentAssets: {
             accountsReceivable,
-            arNote: `Management fees received ${nextMonthStart.toLocaleString('en-US', { month: 'long', year: 'numeric' })}`,
             cash: totalCash,
             cashAccounts,
             totalCurrentAssets
@@ -527,8 +507,7 @@ router.get('/reports/flofr', requireAuth, async (req, res) => {
           totalAssets,
           currentLiabilities: {
             accounts: filteredLiabilities,
-            total: totalLiabilities,
-            eliminatedNote: 'Loan Payable excluded (historical data)'
+            total: totalLiabilities
           },
           shareholdersEquity: {
             commonStock: commonStockTotal,
