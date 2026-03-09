@@ -1857,44 +1857,49 @@
 
     // KPIs based on period
     const p = state.dashboardPeriod;
-    let revenue, expenses, netIncome, priorRev, priorExp, priorNet, label;
+    let revenue, expenses, netIncome, priorRev, priorExp, priorNet, label, compLabel;
     if (p === 'month') {
       revenue = d.monthRevenue; expenses = d.monthExpenses; netIncome = d.monthNetIncome;
       priorRev = d.priorMonthRevenue; priorExp = d.priorMonthExpenses; priorNet = d.priorMonthNetIncome;
       label = 'This Month';
+      compLabel = 'vs prior month';
     } else if (p === 'quarter') {
       revenue = d.quarterRevenue; expenses = d.quarterExpenses; netIncome = d.quarterNetIncome;
       priorRev = d.priorQuarterRevenue; priorExp = d.priorQuarterExpenses; priorNet = d.priorQuarterNetIncome;
       label = 'This Quarter';
+      compLabel = 'vs prior quarter';
     } else {
       revenue = d.ytdRevenue; expenses = d.ytdExpenses; netIncome = d.ytdNetIncome;
       priorRev = d.priorYtdRevenue; priorExp = d.priorYtdExpenses; priorNet = d.priorYtdNetIncome;
       label = 'Year-to-Date';
+      compLabel = 'YoY';
     }
 
-    function pctChange(cur, prev) {
+    // pctChange: invert=true flips color (for expenses, up=bad)
+    function pctChange(cur, prev, invert) {
       if (!prev || prev === 0) return '';
       const pct = ((cur - prev) / Math.abs(prev) * 100).toFixed(1);
-      const cls = pct >= 0 ? 'up' : 'down';
-      const arrow = pct >= 0 ? '↑' : '↓';
-      return `<div class="kpi-change ${cls}">${arrow} ${Math.abs(pct)}% vs prior period</div>`;
+      const isUp = pct >= 0;
+      const cls = invert ? (isUp ? 'down' : 'up') : (isUp ? 'up' : 'down');
+      const arrow = isUp ? '\u2191' : '\u2193';
+      return `<div class="kpi-change ${cls}">${arrow} ${Math.abs(pct)}% ${compLabel}</div>`;
     }
 
     document.getElementById('dashboard-kpis').innerHTML = `
       <div class="kpi-card">
         <div class="kpi-label">${label} Revenue</div>
         <div class="kpi-value positive">${fmtCurrency(revenue)}</div>
-        ${pctChange(revenue, priorRev)}
+        ${pctChange(revenue, priorRev, false)}
       </div>
       <div class="kpi-card">
         <div class="kpi-label">${label} Expenses</div>
         <div class="kpi-value">${fmtCurrency(expenses)}</div>
-        ${pctChange(expenses, priorExp)}
+        ${pctChange(expenses, priorExp, true)}
       </div>
       <div class="kpi-card">
         <div class="kpi-label">${label} Net Income</div>
         <div class="kpi-value ${netIncome >= 0 ? 'positive' : 'negative'}">${fmtCurrency(netIncome)}</div>
-        ${pctChange(netIncome, priorNet)}
+        ${pctChange(netIncome, priorNet, false)}
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Cash Position</div>
